@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Denton County Motivated Seller Leads</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a30;
+    --panel-2: #1a223d;
+    --border: #2a335a;
+    --text: #e8ecf8;
+    --muted: #94a3c4;
+    --accent: #4fc3f7;
+    --hot: #ff5252;
+    --warm: #ffb74d;
+    --cool: #81c784;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  h1 { margin: 0; font-size: 22px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .stats {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--panel-2);
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    min-width: 110px;
+  }
+  .stat .v { font-size: 22px; font-weight: 600; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  main { padding: 24px 28px; }
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  input, select, button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  input { min-width: 240px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  th { background: var(--panel-2); font-weight: 600; cursor: pointer; user-select: none; }
+  tr:hover td { background: rgba(79, 195, 247, .04); }
+  .score-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .score-hi { background: rgba(255, 82, 82, .18); color: var(--hot); }
+  .score-md { background: rgba(255, 183, 77, .15); color: var(--warm); }
+  .score-lo { background: rgba(129, 199, 132, .15); color: var(--cool); }
+  .flag {
+    display: inline-block;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin: 1px 3px 1px 0;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  footer { padding: 16px 28px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Denton County, TX — Motivated Seller Leads</h1>
+    <div class="meta" id="meta">Loading…</div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<main>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search owner, address, doc #, legal…">
+    <select id="cat"><option value="">All categories</option></select>
+    <select id="minScore">
+      <option value="0">All scores</option>
+      <option value="50">≥ 50</option>
+      <option value="65">≥ 65</option>
+      <option value="80">≥ 80</option>
+    </select>
+    <button id="csv">Download CSV</button>
+  </div>
+  <div id="tableWrap"></div>
+</main>
+
+<footer>
+  <span id="src"></span>
+</footer>
+
+<script>
+const COLS = [
+  ["score", "Score"],
+  ["filed", "Filed"],
+  ["cat_label", "Type"],
+  ["doc_num", "Doc #"],
+  ["owner", "Owner"],
+  ["prop_address", "Property"],
+  ["mail_address", "Mailing"],
+  ["amount", "Amount"],
+  ["flags", "Flags"],
+  ["clerk_url", "Link"],
+];
+
+let DATA = { records: [] };
+let sortKey = "score";
+let sortDir = -1;
+
+function fmtMoney(n) {
+  if (!n) return "";
+  return "$" + Number(n).toLocaleString(undefined, {maximumFractionDigits: 0});
+}
+
+function scoreClass(s) {
+  if (s >= 70) return "score-hi";
+  if (s >= 50) return "score-md";
+  return "score-lo";
+}
+
+async function load() {
+  try {
+    const r = await fetch("records.json", { cache: "no-store" });
+    DATA = await r.json();
+  } catch (e) {
+    document.getElementById("tableWrap").innerHTML =
+      `<div class="empty">Could not load records.json: ${e}</div>`;
+    return;
+  }
+  document.getElementById("meta").textContent =
+    `Last fetched ${DATA.fetched_at || "—"} · range ${DATA.date_range?.start || "?"} → ${DATA.date_range?.end || "?"}`;
+  document.getElementById("src").textContent = DATA.source || "";
+  const stats = document.getElementById("stats");
+  stats.innerHTML = `
+    <div class="stat"><div class="v">${DATA.total || 0}</div><div class="l">Leads</div></div>
+    <div class="stat"><div class="v">${DATA.with_address || 0}</div><div class="l">With address</div></div>
+    <div class="stat"><div class="v">${(DATA.records||[]).filter(r=>r.score>=70).length}</div><div class="l">Hot (≥70)</div></div>
+  `;
+  const cats = [...new Set((DATA.records||[]).map(r => r.cat_label).filter(Boolean))].sort();
+  const sel = document.getElementById("cat");
+  cats.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c; o.textContent = c;
+    sel.appendChild(o);
+  });
+  render();
+}
+
+function render() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const cat = document.getElementById("cat").value;
+  const minScore = +document.getElementById("minScore").value;
+  let rows = (DATA.records || []).filter(r => {
+    if (cat && r.cat_label !== cat) return false;
+    if ((r.score || 0) < minScore) return false;
+    if (q) {
+      const blob = [r.owner, r.prop_address, r.mail_address, r.doc_num, r.legal, r.cat_label]
+        .join(" ").toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  rows.sort((a, b) => {
+    const va = a[sortKey] ?? "";
+    const vb = b[sortKey] ?? "";
+    if (typeof va === "number" || typeof vb === "number") return (va - vb) * sortDir;
+    return String(va).localeCompare(String(vb)) * sortDir;
+  });
+
+  if (!rows.length) {
+    document.getElementById("tableWrap").innerHTML = `<div class="empty">No leads match.</div>`;
+    return;
+  }
+
+  const head = COLS.map(([k,l]) =>
+    `<th data-k="${k}">${l}${sortKey===k?(sortDir<0?" ▾":" ▴"):""}</th>`).join("");
+  const body = rows.map(r => `
+    <tr>
+      <td><span class="score-pill ${scoreClass(r.score)}">${r.score}</span></td>
+      <td>${r.filed || ""}</td>
+      <td>${r.cat_label || r.doc_type || ""}</td>
+      <td>${r.doc_num || ""}</td>
+      <td>${r.owner || ""}</td>
+      <td>${[r.prop_address, r.prop_city, r.prop_zip].filter(Boolean).join(", ")}</td>
+      <td>${[r.mail_address, r.mail_city, r.mail_state, r.mail_zip].filter(Boolean).join(", ")}</td>
+      <td>${fmtMoney(r.amount)}</td>
+      <td>${(r.flags||[]).map(f=>`<span class="flag">${f}</span>`).join("")}</td>
+      <td>${r.clerk_url ? `<a href="${r.clerk_url}" target="_blank" rel="noopener">view</a>` : ""}</td>
+    </tr>
+  `).join("");
+  document.getElementById("tableWrap").innerHTML =
+    `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  document.querySelectorAll("th[data-k]").forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      if (sortKey === k) sortDir = -sortDir;
+      else { sortKey = k; sortDir = -1; }
+      render();
+    };
+  });
+}
+
+function downloadCSV() {
+  const headers = ["First Name","Last Name","Mailing Address","Mailing City","Mailing State","Mailing Zip",
+    "Property Address","Property City","Property State","Property Zip","Lead Type","Document Type",
+    "Date Filed","Document Number","Amount/Debt Owed","Seller Score","Motivated Seller Flags","Source","Public Records URL"];
+  const rows = [headers];
+  for (const r of (DATA.records || [])) {
+    let first = "", last = "";
+    const n = (r.owner || "").trim();
+    if (n.includes(",")) {
+      const [l, f] = n.split(",", 2); last = (l||"").trim(); first = (f||"").trim();
+    } else if (n) {
+      const parts = n.split(/\s+/);
+      last = parts.pop(); first = parts.join(" ");
+    }
+    rows.push([first, last, r.mail_address, r.mail_city, r.mail_state, r.mail_zip,
+      r.prop_address, r.prop_city, r.prop_state, r.prop_zip,
+      r.cat_label, r.doc_type, r.filed, r.doc_num,
+      r.amount || "", r.score, (r.flags||[]).join("; "),
+      DATA.source || "", r.clerk_url || ""]);
+  }
+  const csv = rows.map(r => r.map(c => {
+    const s = String(c == null ? "" : c);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "denton-leads.csv";
+  a.click();
+}
+
+document.getElementById("q").oninput = render;
+document.getElementById("cat").onchange = render;
+document.getElementById("minScore").onchange = render;
+document.getElementById("csv").onclick = downloadCSV;
+load();
+</script>
+</body>
+</html>
