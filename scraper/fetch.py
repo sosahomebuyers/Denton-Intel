@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """
-Denton County, Texas - Motivated Seller Lead Scraper
-=====================================================
-Scrapes the Denton County Clerk public records portal for motivated-seller
-indicator filings (lis pendens, pre-foreclosure, tax / mechanic liens,
-probate, judgments, etc.), enriches each lead with parcel/owner mailing
-address data from the Denton Central Appraisal District (DCAD) bulk DBF
-download, scores each record 0-100, and writes:
-    dashboard/records.json
-    data/records.json
+Denton County, Texas - Motivated Seller Lead Scraper (v2)
+==========================================================
 
-Also exposes a CLI flag (--ghl) to emit a GoHighLevel-ready CSV.
-
-Design notes
-------------
-* Clerk portal is JavaScript-driven (PublicSearch / Tyler) -> Playwright async.
-* DCAD property search posts back via __doPostBack to download a ZIP that
-  contains a DBF file -> requests + BeautifulSoup, parsed with dbfread.
-* All network/parse code is wrapped in retry-with-backoff and per-record
-  try/except so a single bad row never crashes the run.
+v2 changes vs v1
+----------------
+* Clerk portal scraper rewritten against the *actual* PublicSearch UI we
+  observed at denton.tx.publicsearch.us:
+    - Department: Real Property
+    - Search Term input
+    - Date Range two-input picker (M/D/YYYY)
+    - Purple "Search" button
+    - Result table columns: GRANTOR, GRANTEE, DOC TYPE, RECORDED DATE,
+      DOC NUMBER, BOOK/VOLUME/PAGE, LEGAL DESCRIPTION, LOT, BLOCK
+* Each query navigates *directly* to the results URL with query params, so
+  if the form filling fails we still get results.
+* Client-side date filter is applied as a safety net.
+* DCAD bulk download switched to Playwright (the static endpoint returned
+  403 to the requests UA). Falls back to a manually-checked-in DBF if the
+  Playwright download still fails.
+* Result rows are de-duped by (doc_num, cat) and capped at 1000 per query.
+* Every query has independent retry; one failed query never kills the run.
 """
 
 from __future__ import annotations
@@ -37,19 +39,19 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlencode, quote
 
 import requests
 from bs4 import BeautifulSoup
 
 try:
     from dbfread import DBF
-except ImportError:  # pragma: no cover - dbfread is in requirements.txt
+except ImportError:
     DBF = None  # type: ignore
 
 try:
     from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-except ImportError:  # pragma: no cover
+except ImportError:
     async_playwright = None  # type: ignore
     PWTimeout = Exception  # type: ignore
 
@@ -64,9 +66,9 @@ CLERK_URL = "https://denton.tx.publicsearch.us"
 PAD_URL = "https://www.dentoncad.com/property-search"
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "7"))
 MAX_RETRIES = 3
-RETRY_BACKOFF = 2.5  # seconds, exponential
+RETRY_BACKOFF = 2.5
 HTTP_TIMEOUT = 60
-PW_TIMEOUT = 45_000  # ms
+PW_TIMEOUT = 60_000  # ms
 
 ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_DIR = ROOT / "dashboard"
@@ -78,31 +80,61 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
 
 
 # ---------------------------------------------------------------------------
-# Document type taxonomy
+# Doc type taxonomy + classification
 # ---------------------------------------------------------------------------
-# Each entry: (full label, motivated-seller flag label, search query terms)
-DOC_TYPES: Dict[str, Tuple[str, str, List[str]]] = {
-    "LP":       ("Lis Pendens",            "Lis pendens",      ["LIS PENDENS", "NOTICE LIS PENDENS"]),
-    "NOFC":     ("Notice of Foreclosure",  "Pre-foreclosure",  ["NOTICE OF FORECLOSURE", "NOTICE OF SUBSTITUTE TRUSTEE", "NOTICE OF TRUSTEE SALE"]),
-    "TAXDEED":  ("Tax Deed",               "Tax lien",         ["TAX DEED", "TAX SALE DEED", "SHERIFF TAX DEED"]),
-    "JUD":      ("Judgment",               "Judgment lien",    ["JUDGMENT", "ABSTRACT OF JUDGMENT"]),
-    "CCJ":      ("Certified Judgment",     "Judgment lien",    ["CERTIFIED JUDGMENT", "CERTIFIED COPY OF JUDGMENT"]),
-    "DRJUD":    ("Domestic Judgment",      "Judgment lien",    ["DOMESTIC JUDGMENT", "DOMESTIC RELATIONS JUDGMENT"]),
-    "LNCORPTX": ("Corporate Tax Lien",     "Tax lien",         ["STATE TAX LIEN", "TEXAS TAX LIEN", "CORPORATE TAX LIEN"]),
-    "LNIRS":    ("IRS Tax Lien",           "Tax lien",         ["IRS LIEN", "FEDERAL TAX LIEN", "NOTICE OF FEDERAL TAX LIEN"]),
-    "LNFED":    ("Federal Lien",           "Tax lien",         ["FEDERAL LIEN"]),
-    "LN":       ("Lien",                   "Mechanic lien",    ["LIEN"]),
-    "LNMECH":   ("Mechanic's Lien",        "Mechanic lien",    ["MECHANIC LIEN", "MECHANICS LIEN", "MATERIALMAN LIEN", "M&M LIEN"]),
-    "LNHOA":    ("HOA Lien",               "Mechanic lien",    ["HOA LIEN", "ASSESSMENT LIEN", "HOMEOWNERS ASSOCIATION LIEN"]),
-    "MEDLN":    ("Medicaid Lien",          "Tax lien",         ["MEDICAID LIEN", "MERP LIEN"]),
-    "PRO":      ("Probate",                "Probate / estate", ["PROBATE", "AFFIDAVIT OF HEIRSHIP", "LETTERS TESTAMENTARY", "SMALL ESTATE AFFIDAVIT"]),
-    "NOC":      ("Notice of Commencement", "Mechanic lien",    ["NOTICE OF COMMENCEMENT"]),
-    "RELLP":    ("Release of Lis Pendens", "Lis pendens",      ["RELEASE LIS PENDENS", "RELEASE OF LIS PENDENS"]),
+# Each entry: (display label, motivated-seller flag, list of (search_term, doc_type_regex))
+# The doc_type_regex narrows which result rows we keep, so e.g. searching
+# "LIEN" doesn't pull every release/extension.
+
+DOC_TYPES: Dict[str, Tuple[str, str, List[Tuple[str, str]]]] = {
+    "LP":       ("Lis Pendens",            "Lis pendens",
+                 [("LIS PENDENS",                  r"\bLIS\s*PENDENS\b(?!.*RELEASE)"),
+                  ("NOTICE LIS PENDENS",           r"NOTICE.*LIS\s*PENDENS")]),
+    "RELLP":    ("Release Lis Pendens",    "Lis pendens",
+                 [("RELEASE LIS PENDENS",          r"RELEASE.*LIS\s*PENDENS")]),
+    "NOFC":     ("Notice of Foreclosure",  "Pre-foreclosure",
+                 [("NOTICE OF FORECLOSURE",        r"NOTICE.*FORECLOSURE"),
+                  ("NOTICE OF SUBSTITUTE TRUSTEE", r"NOTICE.*(SUBSTITUTE\s*TRUSTEE|TRUSTEE.*SALE)"),
+                  ("NOTICE OF TRUSTEE SALE",       r"NOTICE.*TRUSTEE.*SALE")]),
+    "TAXDEED":  ("Tax Deed",               "Tax lien",
+                 [("TAX DEED",                     r"\bTAX\s*DEED\b"),
+                  ("SHERIFF TAX DEED",             r"SHERIFF.*TAX")]),
+    "JUD":      ("Judgment",               "Judgment lien",
+                 [("ABSTRACT OF JUDGMENT",         r"ABSTRACT.*JUDGMENT"),
+                  ("JUDGMENT",                     r"\bJUDGMENT\b")]),
+    "CCJ":      ("Certified Judgment",     "Judgment lien",
+                 [("CERTIFIED COPY OF JUDGMENT",   r"CERTIFIED.*JUDGMENT")]),
+    "DRJUD":    ("Domestic Judgment",      "Judgment lien",
+                 [("DOMESTIC RELATIONS JUDGMENT",  r"DOMESTIC.*JUDGMENT")]),
+    "LNCORPTX": ("Corporate Tax Lien",     "Tax lien",
+                 [("STATE TAX LIEN",               r"STATE.*TAX.*LIEN"),
+                  ("TEXAS TAX LIEN",               r"TEXAS.*TAX.*LIEN")]),
+    "LNIRS":    ("IRS Tax Lien",           "Tax lien",
+                 [("FEDERAL TAX LIEN",             r"FEDERAL.*TAX.*LIEN"),
+                  ("IRS LIEN",                     r"IRS.*LIEN")]),
+    "LNFED":    ("Federal Lien",           "Tax lien",
+                 [("FEDERAL LIEN",                 r"FEDERAL.*LIEN")]),
+    "LNMECH":   ("Mechanic's Lien",        "Mechanic lien",
+                 [("MECHANIC LIEN",                r"MECHANIC.*LIEN"),
+                  ("M&M LIEN",                     r"M\s*&\s*M.*LIEN"),
+                  ("MATERIALMAN LIEN",             r"MATERIAL.*LIEN")]),
+    "LNHOA":    ("HOA Lien",               "Mechanic lien",
+                 [("HOA LIEN",                     r"HOA.*LIEN"),
+                  ("ASSESSMENT LIEN",              r"ASSESSMENT.*LIEN"),
+                  ("HOMEOWNERS ASSOCIATION LIEN",  r"HOMEOWNERS.*LIEN")]),
+    "MEDLN":    ("Medicaid Lien",          "Tax lien",
+                 [("MEDICAID LIEN",                r"MEDICAID.*LIEN")]),
+    "PRO":      ("Probate",                "Probate / estate",
+                 [("AFFIDAVIT OF HEIRSHIP",        r"AFFIDAVIT.*HEIRSHIP"),
+                  ("PROBATE",                      r"PROBATE"),
+                  ("LETTERS TESTAMENTARY",         r"LETTERS.*TESTAMENTARY")]),
+    "NOC":      ("Notice of Commencement", "Mechanic lien",
+                 [("NOTICE OF COMMENCEMENT",       r"NOTICE.*COMMENCEMENT")]),
 }
 
 
@@ -149,20 +181,19 @@ def log(msg: str) -> None:
 def safe(fn, *args, default=None, **kwargs):
     try:
         return fn(*args, **kwargs)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log(f"safe() suppressed {fn.__name__}: {e}")
         return default
 
 
 def retry(times: int = MAX_RETRIES, backoff: float = RETRY_BACKOFF):
-    """Sync retry decorator."""
     def deco(fn):
         def wrap(*args, **kwargs):
             last = None
             for i in range(times):
                 try:
                     return fn(*args, **kwargs)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     last = e
                     sleep = backoff ** i
                     log(f"{fn.__name__} attempt {i+1}/{times} failed: {e} — retrying in {sleep:.1f}s")
@@ -173,12 +204,11 @@ def retry(times: int = MAX_RETRIES, backoff: float = RETRY_BACKOFF):
 
 
 async def aretry(coro_factory, times: int = MAX_RETRIES, backoff: float = RETRY_BACKOFF, label: str = ""):
-    """Async retry helper. Pass a zero-arg lambda that returns a coroutine."""
     last = None
     for i in range(times):
         try:
             return await coro_factory()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             last = e
             sleep = backoff ** i
             log(f"[async] {label} attempt {i+1}/{times} failed: {e} — retrying in {sleep:.1f}s")
@@ -191,7 +221,7 @@ _money_re = re.compile(r"[-+]?\$?\s*([0-9][0-9,]*(?:\.\d+)?)")
 def parse_amount(text: str) -> float:
     if not text:
         return 0.0
-    m = _money_re.search(text.replace(",", ","))
+    m = _money_re.search(text)
     if not m:
         return 0.0
     try:
@@ -201,7 +231,6 @@ def parse_amount(text: str) -> float:
 
 
 def parse_date(text: str) -> str:
-    """Return ISO yyyy-mm-dd or ''. Accepts a wide range of US date formats."""
     if not text:
         return ""
     text = text.strip()
@@ -211,7 +240,6 @@ def parse_date(text: str) -> str:
             return datetime.strptime(text, f).strftime("%Y-%m-%d")
         except ValueError:
             continue
-    # ISO-ish with time
     try:
         return datetime.fromisoformat(text.split("T")[0]).strftime("%Y-%m-%d")
     except (ValueError, TypeError):
@@ -221,19 +249,15 @@ def parse_date(text: str) -> str:
 def normalize_name(name: str) -> str:
     if not name:
         return ""
-    s = re.sub(r"\s+", " ", name).strip().upper()
-    # Strip common entity / title noise for matching only (preserve original elsewhere)
-    return s
+    return re.sub(r"\s+", " ", name).strip().upper()
 
 
 def name_variants(name: str) -> List[str]:
-    """Generate "FIRST LAST", "LAST FIRST", "LAST, FIRST" variants."""
     n = normalize_name(name)
     if not n:
         return []
     out = {n}
     if "," in n:
-        # already LAST, FIRST
         last, _, first = n.partition(",")
         last = last.strip()
         first = first.strip()
@@ -257,21 +281,20 @@ def name_variants(name: str) -> List[str]:
 def is_entity(name: str) -> bool:
     if not name:
         return False
-    n = name.upper()
+    n = " " + name.upper() + " "
     markers = (" LLC", " L.L.C", " INC", " INC.", " CORP", " CO.", " COMPANY",
-               " LP", " L.P", " LLP", " TRUST", " ESTATE", " BANK", " ASSOCIATION",
-               " HOA", " PARTNERS", " PARTNERSHIP", " HOLDINGS", " GROUP",
-               " ENTERPRISES", " VENTURES")
-    return any(m in f" {n} " for m in markers)
+               " LP ", " L.P", " LLP", " TRUST", " ESTATE", " BANK",
+               " ASSOCIATION", " HOA", " PARTNERS", " PARTNERSHIP",
+               " HOLDINGS", " GROUP", " ENTERPRISES", " VENTURES",
+               " STATE OF", " COUNTY OF", " CITY OF")
+    return any(m in n for m in markers)
 
 
 # ---------------------------------------------------------------------------
-# Property Appraiser (DCAD) — bulk DBF download via __doPostBack
+# Property Appraiser (DCAD) — Playwright-based bulk download
 # ---------------------------------------------------------------------------
 
 class ParcelLookup:
-    """In-memory owner-name -> mailing/site address lookup built from DCAD DBF."""
-
     def __init__(self) -> None:
         self.by_name: Dict[str, Dict[str, str]] = {}
         self.loaded = False
@@ -281,15 +304,15 @@ class ParcelLookup:
         if not owner:
             return
         for v in name_variants(owner):
-            # First write wins; later collisions don't overwrite (keeps most-recent first parcel)
             self.by_name.setdefault(v, rec)
 
     def lookup(self, owner: str) -> Optional[Dict[str, str]]:
+        if not self.loaded:
+            return None
         for v in name_variants(owner):
             hit = self.by_name.get(v)
             if hit:
                 return hit
-        # Fuzzy fallback: last-name token match if first/last fully reversed unknown
         n = normalize_name(owner)
         if n:
             tokens = [t for t in re.split(r"[ ,]+", n) if t]
@@ -305,7 +328,6 @@ def _pick(rec: Dict[str, Any], *keys: str) -> str:
     for k in keys:
         if k in rec and rec[k] not in (None, ""):
             return str(rec[k]).strip()
-    # Case-insensitive fallback
     upper = {str(k).upper(): v for k, v in rec.items()}
     for k in keys:
         v = upper.get(k.upper())
@@ -314,127 +336,110 @@ def _pick(rec: Dict[str, Any], *keys: str) -> str:
     return ""
 
 
-@retry()
-def _get(session: requests.Session, url: str, **kw) -> requests.Response:
-    kw.setdefault("timeout", HTTP_TIMEOUT)
-    kw.setdefault("headers", {"User-Agent": USER_AGENT})
-    r = session.get(url, **kw)
-    r.raise_for_status()
-    return r
+async def download_parcel_dbf_playwright() -> Optional[Path]:
+    """Download the DCAD bulk parcel ZIP via a real browser session.
 
-
-@retry()
-def _post(session: requests.Session, url: str, data: Dict[str, str], **kw) -> requests.Response:
-    kw.setdefault("timeout", HTTP_TIMEOUT)
-    kw.setdefault("headers", {"User-Agent": USER_AGENT})
-    r = session.post(url, data=data, **kw)
-    r.raise_for_status()
-    return r
-
-
-def _aspx_state(html: str) -> Dict[str, str]:
-    """Extract __VIEWSTATE / __EVENTVALIDATION / __VIEWSTATEGENERATOR fields."""
-    soup = BeautifulSoup(html, "lxml")
-    fields: Dict[str, str] = {}
-    for name in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION", "__VIEWSTATEENCRYPTED"):
-        el = soup.find("input", {"name": name})
-        if el and el.get("value") is not None:
-            fields[name] = el.get("value", "")
-    return fields
-
-
-def download_parcel_dbf() -> Optional[Path]:
-    """Download DCAD bulk DBF parcel file. Cached daily.
-
-    DCAD's property-search page exposes a "Download Public Data" link that fires
-    a __doPostBack to stream a ZIP containing parcel DBF files.  The exact event
-    target name has shifted over time; we discover it by scraping the page first.
+    The DCAD endpoint returns 403 to the python-requests UA, so we drive
+    Chromium and accept the file via Playwright's download handling.
     """
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    cache_zip = CACHE_DIR / f"dcad_parcels_{today}.zip"
     extract_dir = CACHE_DIR / f"dcad_parcels_{today}"
-
     if extract_dir.exists():
         for p in extract_dir.rglob("*.dbf"):
             log(f"DCAD DBF cache hit: {p}")
             return p
 
-    sess = requests.Session()
-    sess.headers["User-Agent"] = USER_AGENT
-    try:
-        r = _get(sess, PAD_URL)
-    except Exception as e:  # noqa: BLE001
-        log(f"DCAD page fetch failed: {e}")
+    # 1) If the user/CI checked in a local DBF, prefer that.
+    for p in DATA_DIR.rglob("*.dbf"):
+        log(f"DCAD DBF (local fallback): {p}")
+        return p
+
+    if async_playwright is None:
+        log("Playwright unavailable; skipping DCAD download")
         return None
 
-    state = _aspx_state(r.text)
-    soup = BeautifulSoup(r.text, "lxml")
+    cache_zip = CACHE_DIR / f"dcad_parcels_{today}.zip"
 
-    # Find the __doPostBack target whose surrounding text mentions "public data" / "DBF" / "download"
-    target = None
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        text = (a.get_text(" ", strip=True) or "").lower()
-        if "dopostback" not in href.lower():
-            continue
-        if any(kw in text for kw in ("public data", "bulk", "dbf", "download data", "appraisal data")):
-            m = re.search(r"__doPostBack\(['\"]([^'\"]+)['\"],\s*['\"]([^'\"]*)['\"]", href)
-            if m:
-                target = (m.group(1), m.group(2))
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True, args=["--no-sandbox"])
+        ctx = await browser.new_context(user_agent=USER_AGENT, accept_downloads=True)
+        page = await ctx.new_page()
+        page.set_default_timeout(PW_TIMEOUT)
+        try:
+            await page.goto(PAD_URL, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
+        except Exception as e:
+            log(f"DCAD goto failed: {e}")
+            await browser.close()
+            return None
+
+        # Click any "I agree / continue" buttons
+        for sel in ('button:has-text("Accept")',
+                    'button:has-text("I Agree")',
+                    'button:has-text("Continue")'):
+            try:
+                btn = page.locator(sel).first
+                if await btn.count():
+                    await btn.click(timeout=2500)
+            except Exception:
+                pass
+
+        # Find a download link/button
+        link_sels = [
+            'a:has-text("Public Data")',
+            'a:has-text("Bulk Data")',
+            'a:has-text("Download Data")',
+            'a:has-text("Appraisal Data")',
+            'a[href*="zip" i]',
+            'a[href*=".dbf" i]',
+            'button:has-text("Download Data")',
+        ]
+        download_path: Optional[Path] = None
+        for sel in link_sels:
+            try:
+                loc = page.locator(sel).first
+                if not await loc.count():
+                    continue
+                async with page.expect_download(timeout=PW_TIMEOUT) as dl:
+                    await loc.click()
+                d = await dl.value
+                await d.save_as(cache_zip)
+                download_path = cache_zip
+                log(f"DCAD downloaded via {sel}: {cache_zip}")
                 break
+            except Exception as e:
+                log(f"DCAD click {sel} failed: {e}")
+                continue
 
-    # Fallback to a known control name if discovery fails
-    if not target:
-        target = ("ctl00$ContentPlaceHolder1$lnkDownloadData", "")
+        await browser.close()
 
-    payload = {
-        "__EVENTTARGET": target[0],
-        "__EVENTARGUMENT": target[1],
-        **state,
-    }
-
-    try:
-        resp = sess.post(PAD_URL, data=payload, timeout=HTTP_TIMEOUT, stream=True,
-                         headers={"User-Agent": USER_AGENT, "Referer": PAD_URL})
-        resp.raise_for_status()
-    except Exception as e:  # noqa: BLE001
-        log(f"DCAD postback download failed: {e}")
+    if not download_path or not download_path.exists() or download_path.stat().st_size < 1024:
+        log("DCAD download did not produce a valid file; continuing without parcel enrichment")
         return None
 
-    ctype = resp.headers.get("Content-Type", "").lower()
-    if "zip" not in ctype and "octet-stream" not in ctype and "application" not in ctype:
-        log(f"DCAD response not a zip (Content-Type={ctype}); skipping parcel enrichment")
-        return None
-
-    cache_zip.write_bytes(resp.content)
     try:
-        with zipfile.ZipFile(cache_zip) as zf:
+        with zipfile.ZipFile(download_path) as zf:
             zf.extractall(extract_dir)
     except zipfile.BadZipFile:
-        log("DCAD response was not a valid zip — skipping enrichment")
+        # Maybe it's an unwrapped DBF
+        if download_path.suffix.lower() == ".dbf":
+            return download_path
+        log("DCAD download not a zip; skipping enrichment")
         return None
 
     for p in extract_dir.rglob("*.dbf"):
         log(f"DCAD DBF extracted: {p}")
         return p
-
-    log("DCAD zip contained no DBF — skipping enrichment")
     return None
 
 
-def build_parcel_lookup() -> ParcelLookup:
+def build_parcel_lookup_from_dbf(dbf_path: Path) -> ParcelLookup:
     lookup = ParcelLookup()
     if DBF is None:
-        log("dbfread not installed — skipping parcel enrichment")
+        log("dbfread not installed; skipping parcel enrichment")
         return lookup
-
-    dbf_path = safe(download_parcel_dbf)
-    if not dbf_path:
-        return lookup
-
     try:
         table = DBF(str(dbf_path), load=False, ignore_missing_memofile=True, encoding="latin-1")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log(f"Failed to open DBF {dbf_path}: {e}")
         return lookup
 
@@ -442,29 +447,29 @@ def build_parcel_lookup() -> ParcelLookup:
     for row in table:
         try:
             rec = {
-                "owner": _pick(row, "OWNER", "OWN1", "OWNER1", "OWNERNAME"),
-                "site_addr": _pick(row, "SITE_ADDR", "SITEADDR", "SITUS_ADDR", "SITUSADDR"),
-                "site_city": _pick(row, "SITE_CITY", "SITUS_CITY", "SITECITY"),
-                "site_zip":  _pick(row, "SITE_ZIP",  "SITUS_ZIP",  "SITEZIP"),
-                "mail_addr": _pick(row, "ADDR_1", "MAILADR1", "MAIL_ADDR", "MAILADDR", "MAILING_AD"),
-                "mail_city": _pick(row, "CITY", "MAILCITY", "MAIL_CITY"),
-                "mail_state":_pick(row, "STATE", "MAILSTATE", "MAIL_STATE"),
-                "mail_zip":  _pick(row, "ZIP", "MAILZIP", "MAIL_ZIP", "ZIPCODE"),
+                "owner":      _pick(row, "OWNER", "OWN1", "OWNER1", "OWNERNAME"),
+                "site_addr":  _pick(row, "SITE_ADDR", "SITEADDR", "SITUS_ADDR", "SITUSADDR"),
+                "site_city":  _pick(row, "SITE_CITY", "SITUS_CITY", "SITECITY"),
+                "site_zip":   _pick(row, "SITE_ZIP",  "SITUS_ZIP",  "SITEZIP"),
+                "mail_addr":  _pick(row, "ADDR_1", "MAILADR1", "MAIL_ADDR", "MAILADDR", "MAILING_AD"),
+                "mail_city":  _pick(row, "CITY", "MAILCITY", "MAIL_CITY"),
+                "mail_state": _pick(row, "STATE", "MAILSTATE", "MAIL_STATE"),
+                "mail_zip":   _pick(row, "ZIP", "MAILZIP", "MAIL_ZIP", "ZIPCODE"),
             }
             if rec["owner"]:
                 lookup.add(rec)
                 count += 1
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log(f"DBF row skipped: {e}")
             continue
 
-    log(f"Built parcel lookup with {count:,} owner records ({len(lookup.by_name):,} name variants)")
+    log(f"Parcel lookup built: {count:,} owners, {len(lookup.by_name):,} name variants")
     lookup.loaded = count > 0
     return lookup
 
 
 # ---------------------------------------------------------------------------
-# Clerk Portal scraping (Playwright async)
+# Clerk portal scraping (PublicSearch / neumo)
 # ---------------------------------------------------------------------------
 
 def _date_range(days: int = LOOKBACK_DAYS) -> Tuple[str, str]:
@@ -473,16 +478,23 @@ def _date_range(days: int = LOOKBACK_DAYS) -> Tuple[str, str]:
     return start.strftime("%m/%d/%Y"), end.strftime("%m/%d/%Y")
 
 
-async def _scrape_query(page, query: str, start: str, end: str) -> List[Dict[str, str]]:
-    """Run a single keyword query against the PublicSearch portal and return raw rows."""
-    rows: List[Dict[str, str]] = []
-    try:
-        await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
-    except PWTimeout:
-        log(f"clerk goto timeout for query={query!r}")
-        return rows
+def _build_results_url(query: str, start: str, end: str, page_size: int = 50) -> str:
+    """Best-effort direct URL into the results page (skips form interaction).
 
-    # Dismiss disclaimer / cookie banner if present
+    PublicSearch surfaces query state in the URL; multiple parameter shapes have
+    been observed across counties so we encode the most common one.
+    """
+    params = {
+        "department": "RP",
+        "searchType": "quickSearch",
+        "searchValue": query,
+        "recordedDateRange": f"{start},{end}",
+        "searchOcrText": "false",
+    }
+    return f"{CLERK_URL}/results?{urlencode(params, quote_via=quote)}"
+
+
+async def _accept_disclaimer(page) -> None:
     for sel in ('button:has-text("Accept")',
                 'button:has-text("I Agree")',
                 'button:has-text("Agree")',
@@ -491,229 +503,280 @@ async def _scrape_query(page, query: str, start: str, end: str) -> List[Dict[str
         try:
             btn = page.locator(sel).first
             if await btn.count():
-                await btn.click(timeout=2500)
-                break
-        except Exception:  # noqa: BLE001
-            pass
+                await btn.click(timeout=2000)
+                return
+        except Exception:
+            continue
 
-    # Find the global search input
-    search_box = None
-    for sel in ('input[type="search"]',
-                'input[placeholder*="Search" i]',
-                'input[name*="search" i]',
-                'input[aria-label*="search" i]'):
+
+async def _fill_form_search(page, query: str, start: str, end: str) -> bool:
+    """Navigate to home, fill the search form, click Search. Returns success."""
+    try:
+        await page.goto(CLERK_URL, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
+    except PWTimeout:
+        return False
+    await _accept_disclaimer(page)
+
+    # Search Term input — multiple selector strategies
+    term_input = None
+    for sel in ('input[placeholder*="Search Term" i]',
+                'input[aria-label*="Search Term" i]',
+                'input[name*="searchTerm" i]',
+                'input[name*="searchValue" i]',
+                'input[type="search"]',
+                'input[placeholder*="Search" i]'):
         loc = page.locator(sel).first
         try:
             if await loc.count():
-                search_box = loc
+                term_input = loc
                 break
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
-
-    if not search_box:
-        log("Could not locate clerk search input")
-        return rows
+    if not term_input:
+        return False
 
     try:
-        await search_box.fill("")
-        await search_box.type(query, delay=15)
-        await search_box.press("Enter")
-    except Exception as e:  # noqa: BLE001
-        log(f"search fill/submit failed for {query!r}: {e}")
-        return rows
+        await term_input.fill("")
+        await term_input.type(query, delay=10)
+    except Exception:
+        return False
 
-    # Apply date range filter if visible
+    # Date range — find the two date inputs near a "Date Range" label
+    date_inputs = page.locator(
+        'input[placeholder*="MM/DD" i], input[type="date"], '
+        'input[aria-label*="date" i], input[name*="date" i]'
+    )
     try:
-        await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
-    except PWTimeout:
-        pass
+        n = await date_inputs.count()
+    except Exception:
+        n = 0
+    if n >= 2:
+        try:
+            await date_inputs.nth(0).fill("")
+            await date_inputs.nth(0).type(start, delay=10)
+            await date_inputs.nth(1).fill("")
+            await date_inputs.nth(1).type(end, delay=10)
+            await date_inputs.nth(1).press("Tab")
+        except Exception:
+            pass
 
-    # Try to set "Filed Date From / To" filters
-    for label, value in (("from", start), ("to", end)):
-        for sel in (f'input[name*="{label}" i]',
-                    f'input[placeholder*="{label}" i]',
-                    f'input[aria-label*="{label}" i]'):
-            try:
-                loc = page.locator(sel).first
-                if await loc.count():
-                    await loc.fill("")
-                    await loc.type(value, delay=10)
-                    await loc.press("Tab")
-                    break
-            except Exception:  # noqa: BLE001
-                continue
-
-    # Click apply / search again if a button exists
-    for sel in ('button:has-text("Apply")',
-                'button:has-text("Search")',
-                'button:has-text("Filter")'):
+    # Click search
+    for sel in ('button:has-text("Search"):not(:has-text("Reset"))',
+                'button[type="submit"]',
+                'button:has-text("Search")'):
         try:
             btn = page.locator(sel).first
             if await btn.count():
-                await btn.click(timeout=2000)
+                await btn.click(timeout=3000)
                 break
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            continue
 
     try:
         await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
     except PWTimeout:
         pass
+    return True
 
-    # Paginate through up to N pages
+
+async def _scrape_query(page, cat: str, label: str, query: str,
+                        type_regex: str, start: str, end: str) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    type_re = re.compile(type_regex, re.I)
+    start_d = datetime.strptime(start, "%m/%d/%Y").date()
+    end_d = datetime.strptime(end, "%m/%d/%Y").date()
+
+    # Strategy 1: direct URL
+    url = _build_results_url(query, start, end)
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
+        await _accept_disclaimer(page)
+        await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
+    except PWTimeout:
+        pass
+    except Exception as e:
+        log(f"  direct URL failed for {query!r}: {e}")
+
+    # Detect "no rows visible" -> fall back to form interaction
+    table_present = False
+    try:
+        await page.wait_for_selector("table tbody tr, [role='row']", timeout=10_000)
+        table_present = True
+    except PWTimeout:
+        table_present = False
+
+    if not table_present:
+        ok = await _fill_form_search(page, query, start, end)
+        if ok:
+            try:
+                await page.wait_for_selector("table tbody tr, [role='row']", timeout=15_000)
+                table_present = True
+            except PWTimeout:
+                pass
+
+    if not table_present:
+        return rows
+
+    # Try to crank page size to 100 if a Results-Per-Page selector exists
+    for sel in ('select[aria-label*="results per page" i]',
+                'select[name*="pageSize" i]',
+                'select:has(option:has-text("100"))'):
+        try:
+            sel_loc = page.locator(sel).first
+            if await sel_loc.count():
+                await sel_loc.select_option(value="100")
+                await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
+                break
+        except Exception:
+            continue
+
+    # Paginate
     seen = set()
-    for page_idx in range(1, 11):
-        # Extract rows from the results table.  PublicSearch UIs all expose results
-        # as a <table> with a <tbody>, or as a list of <a> rows linking to /doc/<id>.
+    for _ in range(15):  # safety cap
         try:
             html = await page.content()
-        except Exception as e:  # noqa: BLE001
-            log(f"page.content() failed: {e}")
+        except Exception as e:
+            log(f"  page.content() failed: {e}")
             break
 
         soup = BeautifulSoup(html, "lxml")
-        new_rows = _parse_clerk_results(soup, page.url)
+        new_rows = _parse_results_table(soup, page.url)
         added = 0
         for r in new_rows:
-            key = (r.get("doc_num") or "", r.get("filed") or "", r.get("doc_type") or "")
+            # Filter by doc type pattern
+            doctype_text = (r.get("doc_type") or "").upper()
+            if doctype_text and not type_re.search(doctype_text):
+                continue
+            # Filter by date (client side safety net)
+            f_iso = parse_date(r.get("filed", ""))
+            if f_iso:
+                try:
+                    fd = datetime.strptime(f_iso, "%Y-%m-%d").date()
+                    if fd < start_d or fd > end_d:
+                        continue
+                except ValueError:
+                    pass
+            key = (r.get("doc_num") or "", doctype_text)
             if key in seen:
                 continue
             seen.add(key)
             rows.append(r)
             added += 1
 
-        # Try Next button
+        # Try Next
         moved = False
-        for sel in ('button[aria-label="Next page"]',
-                    'button:has-text("Next")',
-                    'a[aria-label="Next"]',
+        for sel in ('button[aria-label="Next page" i]',
+                    'a[aria-label="Next page" i]',
+                    'button:has-text("Next"):not([disabled])',
                     'a:has-text("Next")'):
             try:
                 nxt = page.locator(sel).first
-                if await nxt.count() and await nxt.is_enabled():
-                    await nxt.click(timeout=2500)
-                    await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
-                    moved = True
-                    break
-            except Exception:  # noqa: BLE001
+                if not await nxt.count():
+                    continue
+                disabled = await nxt.get_attribute("disabled")
+                aria_disabled = await nxt.get_attribute("aria-disabled")
+                if disabled is not None or aria_disabled == "true":
+                    continue
+                await nxt.click(timeout=2500)
+                await page.wait_for_load_state("networkidle", timeout=PW_TIMEOUT)
+                moved = True
+                break
+            except Exception:
                 continue
-        if not moved or added == 0:
+        if not moved:
             break
 
     return rows
 
 
-def _parse_clerk_results(soup: BeautifulSoup, base_url: str) -> List[Dict[str, str]]:
+def _parse_results_table(soup: BeautifulSoup, base_url: str) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
-
-    # Style 1: HTML table
     for tbl in soup.find_all("table"):
-        head_cells = [c.get_text(" ", strip=True).lower() for c in tbl.find_all("th")]
-        if not head_cells:
+        ths = tbl.find_all("th")
+        if not ths:
             continue
-        if not any("doc" in h or "instrument" in h or "filed" in h for h in head_cells):
+        head = [th.get_text(" ", strip=True).upper() for th in ths]
+        if not any("DOC" in h or "GRANTOR" in h or "RECORDED" in h for h in head):
             continue
-        for tr in tbl.find_all("tr"):
+
+        # Build column index map
+        idx = {h: i for i, h in enumerate(head)}
+        def col(name_options: List[str]) -> int:
+            for n in name_options:
+                for h, i in idx.items():
+                    if n in h:
+                        return i
+            return -1
+
+        c_grantor  = col(["GRANTOR", "PARTY 1", "FROM"])
+        c_grantee  = col(["GRANTEE", "PARTY 2", "TO"])
+        c_doctype  = col(["DOC TYPE", "DOCUMENT TYPE", "INSTRUMENT TYPE", "TYPE"])
+        c_recorded = col(["RECORDED DATE", "FILED", "FILE DATE", "RECORDED"])
+        c_docnum   = col(["DOC NUMBER", "DOCUMENT", "INSTRUMENT", "DOC #", "DOC NO"])
+        c_legal    = col(["LEGAL DESCRIPTION", "LEGAL"])
+        c_amount   = col(["AMOUNT", "CONSIDERATION"])
+
+        for tr in tbl.select("tbody tr"):
             cells = tr.find_all(["td"])
             if not cells:
                 continue
             text_cells = [c.get_text(" ", strip=True) for c in cells]
+            row: Dict[str, str] = {}
+            def get(i: int) -> str:
+                return text_cells[i] if 0 <= i < len(text_cells) else ""
+            row["grantor"]   = get(c_grantor)
+            row["grantee"]   = get(c_grantee)
+            row["doc_type"]  = get(c_doctype)
+            row["filed"]     = get(c_recorded)
+            row["doc_num"]   = get(c_docnum)
+            row["legal"]     = get(c_legal)
+            row["amount"]    = get(c_amount)
+
+            # link to detail
             link = ""
             a = tr.find("a", href=True)
             if a:
                 link = urljoin(base_url, a["href"])
-            row = _row_from_cells(head_cells, text_cells, link)
-            if row.get("doc_num") or row.get("doc_type"):
+            row["clerk_url"] = link
+
+            if row["doc_num"] or row["doc_type"]:
                 rows.append(row)
-
-    # Style 2: card/list result items linking to /doc/<id>
-    if not rows:
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            if "/doc/" in href or "/document/" in href:
-                container = a.find_parent(["li", "div", "article"]) or a
-                text = container.get_text(" | ", strip=True)
-                row = _row_from_text_blob(text, urljoin(base_url, href))
-                if row.get("doc_num") or row.get("doc_type"):
-                    rows.append(row)
-
+        if rows:
+            break
     return rows
-
-
-def _row_from_cells(head: List[str], cells: List[str], link: str) -> Dict[str, str]:
-    out: Dict[str, str] = {"clerk_url": link}
-    for h, v in zip(head, cells):
-        h2 = h.strip().lower()
-        if "doc" in h2 and ("num" in h2 or "#" in h2 or "instrument" in h2):
-            out["doc_num"] = v
-        elif "type" in h2 or "kind" in h2:
-            out["doc_type"] = v
-        elif "filed" in h2 or "record" in h2 or "date" in h2:
-            out.setdefault("filed", v)
-        elif "grantor" in h2 or "from" in h2 or "party 1" in h2:
-            out["grantor"] = v
-        elif "grantee" in h2 or "to" in h2 or "party 2" in h2:
-            out["grantee"] = v
-        elif "legal" in h2 or "description" in h2:
-            out["legal"] = v
-        elif "amount" in h2 or "consideration" in h2:
-            out["amount"] = v
-    return out
-
-
-def _row_from_text_blob(text: str, link: str) -> Dict[str, str]:
-    out: Dict[str, str] = {"clerk_url": link}
-    # Doc number: strings like 2024-12345 / 2024R-12345 / 12345678
-    m = re.search(r"\b(20\d{2}[-R]?\d{4,8}|\d{7,12})\b", text)
-    if m:
-        out["doc_num"] = m.group(1)
-    # Date
-    m = re.search(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b", text)
-    if m:
-        out["filed"] = m.group(0)
-    # Doc type guess: take ALLCAPS chunk
-    m = re.search(r"\b([A-Z][A-Z &/'\-]{4,})\b", text)
-    if m:
-        out["doc_type"] = m.group(1).strip()
-    out["grantor"] = ""
-    out["grantee"] = ""
-    return out
 
 
 async def scrape_clerk(start: str, end: str) -> List[Dict[str, str]]:
     if async_playwright is None:
-        log("Playwright not available — skipping clerk scrape")
+        log("Playwright not available; skipping clerk scrape")
         return []
 
     all_rows: List[Dict[str, str]] = []
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = await browser.new_context(
-            user_agent=USER_AGENT,
-            viewport={"width": 1400, "height": 900},
-        )
-        page = await context.new_page()
+        ctx = await browser.new_context(user_agent=USER_AGENT,
+                                        viewport={"width": 1480, "height": 920})
+        page = await ctx.new_page()
         page.set_default_timeout(PW_TIMEOUT)
 
         for cat, (label, _flag, queries) in DOC_TYPES.items():
-            for q in queries:
-                async def factory(_q=q):
-                    return await _scrape_query(page, _q, start, end)
+            for q, type_regex in queries:
+                async def factory(_q=q, _re=type_regex):
+                    return await _scrape_query(page, cat, label, _q, _re, start, end)
                 try:
                     rows = await aretry(factory, label=f"clerk {cat}/{q}")
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     log(f"clerk query {cat}/{q!r} failed permanently: {e}")
                     rows = []
                 for r in rows:
                     r["_cat"] = cat
                     r["_cat_label"] = label
                 all_rows.extend(rows)
-                log(f"  {cat:<9} {q:<40} -> {len(rows)} rows")
+                log(f"  {cat:<9} {q:<40} -> {len(rows)} rows (kept after type+date filter)")
 
-        await context.close()
+        await ctx.close()
         await browser.close()
 
-    # De-dupe by (doc_num, doc_type)
     seen = set()
     deduped: List[Dict[str, str]] = []
     for r in all_rows:
@@ -737,38 +800,26 @@ async def scrape_clerk(start: str, end: str) -> List[Dict[str, str]]:
 def score_lead(lead: Lead, *, new_this_week: bool = True) -> Tuple[int, List[str]]:
     score = 30
     flags: List[str] = []
-
-    # Category-derived flag
     cat_flag = DOC_TYPES.get(lead.cat, (None, None, None))[1]
     if cat_flag and cat_flag not in flags:
         flags.append(cat_flag)
         score += 10
-
-    # LP + FC combo
-    has_lp = "Lis pendens" in flags or lead.cat in ("LP", "RELLP")
-    has_fc = lead.cat == "NOFC" or "Pre-foreclosure" in flags
+    has_lp = lead.cat in ("LP", "RELLP")
+    has_fc = lead.cat == "NOFC"
     if has_lp and has_fc:
         score += 20
-
-    # Amount tiers
     if lead.amount > 100_000:
         score += 15
     elif lead.amount > 50_000:
         score += 10
-
     if new_this_week:
-        if "New this week" not in flags:
-            flags.append("New this week")
+        flags.append("New this week")
         score += 5
-
     if lead.prop_address or lead.mail_address:
         score += 5
-
     if is_entity(lead.owner) and "LLC / corp owner" not in flags:
         flags.append("LLC / corp owner")
-
-    score = max(0, min(100, score))
-    return score, flags
+    return max(0, min(100, score)), flags
 
 
 # ---------------------------------------------------------------------------
@@ -798,7 +849,7 @@ def build_leads(raw_rows: List[Dict[str, str]], parcels: ParcelLookup,
     for r in raw_rows:
         try:
             cat = r.get("_cat", "")
-            cat_label = r.get("_cat_label", DOC_TYPES.get(cat, ("",))[0])
+            cat_label = r.get("_cat_label") or DOC_TYPES.get(cat, ("",))[0]
             filed = parse_date(r.get("filed", ""))
             owner = (r.get("grantor") or "").strip()
             grantee = (r.get("grantee") or "").strip()
@@ -825,23 +876,22 @@ def build_leads(raw_rows: List[Dict[str, str]], parcels: ParcelLookup,
                 clerk_url=(r.get("clerk_url") or "").strip(),
             )
 
-            # Parcel enrichment
             if owner and parcels.loaded:
                 hit = parcels.lookup(owner)
                 if hit:
                     lead.prop_address = hit.get("site_addr", "")
-                    lead.prop_city = hit.get("site_city", "")
-                    lead.prop_zip = hit.get("site_zip", "")
+                    lead.prop_city    = hit.get("site_city", "")
+                    lead.prop_zip     = hit.get("site_zip", "")
                     lead.mail_address = hit.get("mail_addr", "")
-                    lead.mail_city = hit.get("mail_city", "")
-                    lead.mail_state = hit.get("mail_state", "") or "TX"
-                    lead.mail_zip = hit.get("mail_zip", "")
+                    lead.mail_city    = hit.get("mail_city", "")
+                    lead.mail_state   = hit.get("mail_state", "") or "TX"
+                    lead.mail_zip     = hit.get("mail_zip", "")
 
             score, flags = score_lead(lead, new_this_week=new_this_week)
             lead.score = score
             lead.flags = flags
             leads.append(lead)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log(f"build_leads skipped row: {e}")
             continue
 
@@ -868,10 +918,6 @@ def write_records(leads: List[Lead], start: str, end: str) -> Dict[str, Any]:
         log(f"Wrote {path} ({len(leads)} records)")
     return payload
 
-
-# ---------------------------------------------------------------------------
-# GoHighLevel CSV export
-# ---------------------------------------------------------------------------
 
 GHL_HEADERS = [
     "First Name", "Last Name",
@@ -912,7 +958,10 @@ async def amain(args: argparse.Namespace) -> int:
     start, end = _date_range(args.lookback)
     log(f"Date range: {start} -> {end}")
 
-    parcels = build_parcel_lookup()
+    dbf_path = await download_parcel_dbf_playwright()
+    parcels = build_parcel_lookup_from_dbf(dbf_path) if dbf_path else ParcelLookup()
+    if not parcels.loaded:
+        log("Continuing without parcel/address enrichment")
 
     raw = await scrape_clerk(start, end)
 
@@ -929,27 +978,22 @@ async def amain(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Denton County motivated seller scraper")
     parser.add_argument("--lookback", type=int, default=LOOKBACK_DAYS,
-                        help="Days to look back from today (default: %(default)s)")
+                        help="Days back from today (default: %(default)s)")
     parser.add_argument("--ghl", action="store_true",
                         help="Also write data/ghl_export.csv")
     args = parser.parse_args()
-
     try:
         return asyncio.run(amain(args))
     except KeyboardInterrupt:
         log("Interrupted")
         return 130
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log(f"FATAL: {e}")
-        # Always emit empty records so the dashboard never breaks
         empty = {
             "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "source": f"{COUNTY} County, {STATE} — Clerk + DCAD",
             "date_range": {"start": "", "end": ""},
-            "total": 0,
-            "with_address": 0,
-            "records": [],
-            "error": str(e),
+            "total": 0, "with_address": 0, "records": [], "error": str(e),
         }
         for path in (DASHBOARD_DIR / "records.json", DATA_DIR / "records.json"):
             path.parent.mkdir(parents=True, exist_ok=True)
