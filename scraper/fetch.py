@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
-Denton County, Texas - Motivated Seller Lead Scraper (v3)
+Denton County, Texas - Motivated Seller Lead Scraper (v4)
 ==========================================================
 
-v3 changes vs v2
+v4 changes vs v3
 ----------------
-* Per-doc-type "owner" selection: for liens & judgments the GRANTEE
-  (debtor / property owner) is the lead, not the GRANTOR (creditor / HOA /
-  bank).  For probate the grantor (decedent) is correct.
-* Sort results by Recorded Date descending so we see the newest filings
-  first instead of relevance-ranked oldest hits.
-* DCAD bulk download URL fixed: previous /property-search page does not
-  expose a bulk download.  Now tries https://www.dentoncad.com/data-and-fees
-  and a list of common alternate paths.
-* TX-specific foreclosure keywords added: SUBSTITUTE TRUSTEES SALE, etc.
-* Drop redundant queries that returned identical row sets in v2.
+* Direct clerk doc URL captured per row via Playwright JS evaluation
+  (PublicSearch uses client-side routing, not <a href> in HTML, so the v3
+  HTML parser missed the link).
+* DCAD bulk download replaced with per-property owner-name lookup against
+  DCAD's free public property search (no subscription needed).  Results are
+  cached by owner so we never re-query the same name twice in one run.
+* Legal description preserved through to the records.json so the dashboard
+  can surface it for manual lookup when DCAD doesn't match.
+* Default scrape order is now sortable from the dashboard side; raw records
+  are emitted oldest-first so the dashboard sort by Filed-desc works
+  intuitively.
 """
 
 from __future__ import annotations
@@ -334,6 +335,148 @@ def _pick(rec: Dict[str, Any], *keys: str) -> str:
         if v not in (None, ""):
             return str(v).strip()
     return ""
+
+
+async def dcad_lookup_address(page, owner: str) -> Dict[str, str]:
+    """Search DCAD's free public property search for an owner name.
+
+    Returns {site_addr, site_city, site_zip, mail_addr, mail_city,
+             mail_state, mail_zip} -- empty strings if not found.
+
+    Cached in-process via the @lru_cache wrapper at the call site.
+    """
+    blank = {"site_addr": "", "site_city": "", "site_zip": "",
+             "mail_addr": "", "mail_city": "", "mail_state": "", "mail_zip": ""}
+    if not owner or is_entity(owner) and "DECEASED ESTATE" not in owner.upper():
+        # Skip pure entities — DCAD owner search rarely matches an LLC string
+        # exactly and can produce false positives.
+        if is_entity(owner):
+            return blank
+
+    # DCAD's owner-name search endpoint
+    search_url = "https://www.dentoncad.com/property-search"
+    try:
+        await page.goto(search_url, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
+    except Exception:
+        return blank
+
+    # Find an owner-name input (DCAD's site uses iframe or AJAX search form)
+    owner_input = None
+    for sel in ('input[placeholder*="owner" i]',
+                'input[name*="owner" i]',
+                'input[aria-label*="owner" i]',
+                'input[type="search"]',
+                'input[type="text"]'):
+        try:
+            loc = page.locator(sel).first
+            if await loc.count():
+                owner_input = loc
+                break
+        except Exception:
+            continue
+    if not owner_input:
+        return blank
+
+    try:
+        await owner_input.fill("")
+        await owner_input.type(owner, delay=10)
+        await owner_input.press("Enter")
+    except Exception:
+        return blank
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=15_000)
+    except PWTimeout:
+        pass
+
+    # Parse first result row
+    try:
+        html = await page.content()
+    except Exception:
+        return blank
+    soup = BeautifulSoup(html, "lxml")
+    # Common patterns for property cards / result tables
+    addr = ""
+    city = ""
+    zip_ = ""
+    for tbl in soup.find_all("table"):
+        rows = tbl.select("tbody tr")
+        if not rows:
+            continue
+        cells = [c.get_text(" ", strip=True) for c in rows[0].find_all(["td", "th"])]
+        for c in cells:
+            if re.search(r"\b\d+\s+[A-Z]", c) and not addr:
+                addr = c
+            m = re.search(r"\b(\d{5})(?:-\d{4})?\b", c)
+            if m and not zip_:
+                zip_ = m.group(1)
+        if addr:
+            break
+    if not addr:
+        # try card-style result
+        for el in soup.find_all(string=re.compile(r"\b\d{1,6}\s+[A-Z][A-Za-z]")):
+            txt = el.strip()
+            if re.search(r"\d", txt) and len(txt) < 120:
+                addr = txt
+                break
+    if addr:
+        return {**blank, "site_addr": addr, "site_city": city, "site_zip": zip_,
+                "mail_addr": addr, "mail_city": city, "mail_state": "TX", "mail_zip": zip_}
+    return blank
+
+
+async def enrich_with_dcad(leads: List["Lead"]) -> int:
+    """Mutate `leads` in place, filling in addresses via DCAD owner search.
+
+    Returns the number of leads that got an address.
+    """
+    if async_playwright is None:
+        log("Playwright unavailable; skipping DCAD address enrichment")
+        return 0
+
+    cache: Dict[str, Dict[str, str]] = {}
+    enriched = 0
+    candidates = [l for l in leads if l.owner and not l.prop_address]
+    log(f"DCAD enrichment: {len(candidates)} candidates")
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True, args=["--no-sandbox"])
+        ctx = await browser.new_context(user_agent=USER_AGENT)
+        page = await ctx.new_page()
+        page.set_default_timeout(PW_TIMEOUT)
+
+        for i, lead in enumerate(candidates, 1):
+            key = normalize_name(lead.owner)
+            if key in cache:
+                hit = cache[key]
+            else:
+                try:
+                    hit = await dcad_lookup_address(page, lead.owner)
+                except Exception as e:
+                    log(f"  DCAD lookup error for {lead.owner!r}: {e}")
+                    hit = {}
+                cache[key] = hit
+            if hit and hit.get("site_addr"):
+                lead.prop_address = hit["site_addr"]
+                lead.prop_city    = hit.get("site_city", "")
+                lead.prop_zip     = hit.get("site_zip", "")
+                lead.mail_address = hit.get("mail_addr", lead.prop_address)
+                lead.mail_city    = hit.get("mail_city", "")
+                lead.mail_state   = hit.get("mail_state", "TX")
+                lead.mail_zip     = hit.get("mail_zip", "")
+                enriched += 1
+                # +5 score for having an address now
+                if "Has address" not in lead.flags:
+                    lead.score = min(100, lead.score + 5)
+            if i % 25 == 0:
+                log(f"  DCAD progress: {i}/{len(candidates)} ({enriched} enriched)")
+            await asyncio.sleep(0.3)  # be polite
+
+        await ctx.close()
+        await browser.close()
+
+    log(f"DCAD enrichment done: {enriched}/{len(candidates)} leads got an address")
+    return enriched
 
 
 async def download_parcel_dbf_playwright() -> Optional[Path]:
@@ -671,6 +814,31 @@ async def _scrape_query(page, cat: str, label: str, query: str,
 
         soup = BeautifulSoup(html, "lxml")
         new_rows = _parse_results_table(soup, page.url)
+
+        # Pull clerk doc links via JS, since PublicSearch uses client-side
+        # routing and the rendered HTML does NOT contain <a href="/doc/...">.
+        try:
+            row_links = await page.evaluate("""() => {
+                const rows = Array.from(document.querySelectorAll('table tbody tr'));
+                return rows.map(r => {
+                    let a = r.querySelector('a[href*="/doc/"]');
+                    if (a && a.href) return a.href;
+                    const onclick = r.getAttribute('onclick') || '';
+                    let m = onclick.match(/\\/doc\\/(\\d+)/);
+                    if (m) return location.origin + '/doc/' + m[1];
+                    const ds = r.dataset || {};
+                    if (ds.docId)  return location.origin + '/doc/' + ds.docId;
+                    if (ds.id)     return location.origin + '/doc/' + ds.id;
+                    return '';
+                });
+            }""")
+        except Exception as e:
+            log(f"  link extraction failed: {e}")
+            row_links = []
+
+        for i, r in enumerate(new_rows):
+            if i < len(row_links) and row_links[i]:
+                r["clerk_url"] = row_links[i]
         added = 0
         for r in new_rows:
             # Filter by doc type pattern
@@ -995,14 +1163,21 @@ async def amain(args: argparse.Namespace) -> int:
     start, end = _date_range(args.lookback)
     log(f"Date range: {start} -> {end}")
 
+    # Try bulk DBF first (fast, complete) — if that fails (paywalled etc),
+    # fall through to per-property DCAD owner search after we have leads.
     dbf_path = await download_parcel_dbf_playwright()
     parcels = build_parcel_lookup_from_dbf(dbf_path) if dbf_path else ParcelLookup()
     if not parcels.loaded:
-        log("Continuing without parcel/address enrichment")
+        log("Bulk parcel data unavailable; will use per-property DCAD search instead")
 
     raw = await scrape_clerk(start, end)
-
     leads = build_leads(raw, parcels, start, end)
+
+    if not parcels.loaded and leads:
+        await enrich_with_dcad(leads)
+        # re-sort because scores changed
+        leads.sort(key=lambda x: (-x.score, x.filed or "", x.doc_num))
+
     payload = write_records(leads, start, end)
 
     if args.ghl:
