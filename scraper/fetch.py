@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 """
-Denton County, Texas - Motivated Seller Lead Scraper (v2)
+Denton County, Texas - Motivated Seller Lead Scraper (v3)
 ==========================================================
 
-v2 changes vs v1
+v3 changes vs v2
 ----------------
-* Clerk portal scraper rewritten against the *actual* PublicSearch UI we
-  observed at denton.tx.publicsearch.us:
-    - Department: Real Property
-    - Search Term input
-    - Date Range two-input picker (M/D/YYYY)
-    - Purple "Search" button
-    - Result table columns: GRANTOR, GRANTEE, DOC TYPE, RECORDED DATE,
-      DOC NUMBER, BOOK/VOLUME/PAGE, LEGAL DESCRIPTION, LOT, BLOCK
-* Each query navigates *directly* to the results URL with query params, so
-  if the form filling fails we still get results.
-* Client-side date filter is applied as a safety net.
-* DCAD bulk download switched to Playwright (the static endpoint returned
-  403 to the requests UA). Falls back to a manually-checked-in DBF if the
-  Playwright download still fails.
-* Result rows are de-duped by (doc_num, cat) and capped at 1000 per query.
-* Every query has independent retry; one failed query never kills the run.
+* Per-doc-type "owner" selection: for liens & judgments the GRANTEE
+  (debtor / property owner) is the lead, not the GRANTOR (creditor / HOA /
+  bank).  For probate the grantor (decedent) is correct.
+* Sort results by Recorded Date descending so we see the newest filings
+  first instead of relevance-ranked oldest hits.
+* DCAD bulk download URL fixed: previous /property-search page does not
+  expose a bulk download.  Now tries https://www.dentoncad.com/data-and-fees
+  and a list of common alternate paths.
+* TX-specific foreclosure keywords added: SUBSTITUTE TRUSTEES SALE, etc.
+* Drop redundant queries that returned identical row sets in v2.
 """
 
 from __future__ import annotations
@@ -63,7 +57,13 @@ except ImportError:
 COUNTY = "Denton"
 STATE = "TX"
 CLERK_URL = "https://denton.tx.publicsearch.us"
-PAD_URL = "https://www.dentoncad.com/property-search"
+PAD_URLS = [
+    "https://www.dentoncad.com/data-and-fees",
+    "https://www.dentoncad.com/downloads",
+    "https://www.dentoncad.com/data",
+    "https://www.dentoncad.com/public-data",
+]
+PAD_URL = PAD_URLS[0]  # primary
 LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "7"))
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2.5
@@ -93,49 +93,49 @@ USER_AGENT = (
 
 DOC_TYPES: Dict[str, Tuple[str, str, List[Tuple[str, str]]]] = {
     "LP":       ("Lis Pendens",            "Lis pendens",
-                 [("LIS PENDENS",                  r"\bLIS\s*PENDENS\b(?!.*RELEASE)"),
-                  ("NOTICE LIS PENDENS",           r"NOTICE.*LIS\s*PENDENS")]),
+                 [("LIS PENDENS",                  r"\bLIS\s*PENDENS\b(?!.*RELEASE)")]),
     "RELLP":    ("Release Lis Pendens",    "Lis pendens",
                  [("RELEASE LIS PENDENS",          r"RELEASE.*LIS\s*PENDENS")]),
     "NOFC":     ("Notice of Foreclosure",  "Pre-foreclosure",
-                 [("NOTICE OF FORECLOSURE",        r"NOTICE.*FORECLOSURE"),
-                  ("NOTICE OF SUBSTITUTE TRUSTEE", r"NOTICE.*(SUBSTITUTE\s*TRUSTEE|TRUSTEE.*SALE)"),
-                  ("NOTICE OF TRUSTEE SALE",       r"NOTICE.*TRUSTEE.*SALE")]),
+                 [("SUBSTITUTE TRUSTEES SALE",     r"(SUBSTITUTE.*TRUSTEE|TRUSTEE.*SALE|FORECLOSURE)"),
+                  ("NOTICE OF FORECLOSURE",        r"NOTICE.*FORECLOSURE"),
+                  ("APPOINTMENT OF SUBSTITUTE TRUSTEE",
+                                                    r"(APPOINTMENT.*TRUSTEE|SUBSTITUTE.*TRUSTEE)")]),
     "TAXDEED":  ("Tax Deed",               "Tax lien",
                  [("TAX DEED",                     r"\bTAX\s*DEED\b"),
-                  ("SHERIFF TAX DEED",             r"SHERIFF.*TAX")]),
+                  ("SHERIFF DEED",                 r"SHERIFF.*DEED")]),
     "JUD":      ("Judgment",               "Judgment lien",
                  [("ABSTRACT OF JUDGMENT",         r"ABSTRACT.*JUDGMENT"),
                   ("JUDGMENT",                     r"\bJUDGMENT\b")]),
-    "CCJ":      ("Certified Judgment",     "Judgment lien",
-                 [("CERTIFIED COPY OF JUDGMENT",   r"CERTIFIED.*JUDGMENT")]),
     "DRJUD":    ("Domestic Judgment",      "Judgment lien",
-                 [("DOMESTIC RELATIONS JUDGMENT",  r"DOMESTIC.*JUDGMENT")]),
-    "LNCORPTX": ("Corporate Tax Lien",     "Tax lien",
-                 [("STATE TAX LIEN",               r"STATE.*TAX.*LIEN"),
-                  ("TEXAS TAX LIEN",               r"TEXAS.*TAX.*LIEN")]),
-    "LNIRS":    ("IRS Tax Lien",           "Tax lien",
-                 [("FEDERAL TAX LIEN",             r"FEDERAL.*TAX.*LIEN"),
-                  ("IRS LIEN",                     r"IRS.*LIEN")]),
-    "LNFED":    ("Federal Lien",           "Tax lien",
-                 [("FEDERAL LIEN",                 r"FEDERAL.*LIEN")]),
+                 [("DOMESTIC RELATIONS",           r"DOMESTIC.*RELATIONS")]),
+    "LNCORPTX": ("State Tax Lien",         "Tax lien",
+                 [("STATE TAX LIEN",               r"STATE.*TAX.*LIEN")]),
+    "LNIRS":    ("Federal/IRS Tax Lien",   "Tax lien",
+                 [("FEDERAL TAX LIEN",             r"(FEDERAL|IRS).*(TAX\s*)?LIEN")]),
     "LNMECH":   ("Mechanic's Lien",        "Mechanic lien",
-                 [("MECHANIC LIEN",                r"MECHANIC.*LIEN"),
-                  ("M&M LIEN",                     r"M\s*&\s*M.*LIEN"),
-                  ("MATERIALMAN LIEN",             r"MATERIAL.*LIEN")]),
+                 [("MECHANIC",                     r"(MECHANIC|MATERIALMAN|M\s*&\s*M).*LIEN"),
+                  ("AFFIDAVIT OF LIEN",            r"AFFIDAVIT.*LIEN")]),
     "LNHOA":    ("HOA Lien",               "Mechanic lien",
-                 [("HOA LIEN",                     r"HOA.*LIEN"),
-                  ("ASSESSMENT LIEN",              r"ASSESSMENT.*LIEN"),
-                  ("HOMEOWNERS ASSOCIATION LIEN",  r"HOMEOWNERS.*LIEN")]),
+                 [("ASSESSMENT LIEN",              r"(ASSESSMENT|HOA|HOMEOWNERS).*LIEN"),
+                  ("HOA LIEN",                     r"(HOA|HOMEOWNERS).*LIEN")]),
     "MEDLN":    ("Medicaid Lien",          "Tax lien",
                  [("MEDICAID LIEN",                r"MEDICAID.*LIEN")]),
     "PRO":      ("Probate",                "Probate / estate",
                  [("AFFIDAVIT OF HEIRSHIP",        r"AFFIDAVIT.*HEIRSHIP"),
                   ("PROBATE",                      r"PROBATE"),
-                  ("LETTERS TESTAMENTARY",         r"LETTERS.*TESTAMENTARY")]),
+                  ("LETTERS TESTAMENTARY",         r"LETTERS.*TESTAMENTARY"),
+                  ("EXECUTOR DEED",                r"EXECUTOR.*DEED")]),
     "NOC":      ("Notice of Commencement", "Mechanic lien",
                  [("NOTICE OF COMMENCEMENT",       r"NOTICE.*COMMENCEMENT")]),
 }
+
+# For these doc types, the GRANTEE is the actual property owner / lead.
+# (Banks file judgments against debtors; HOAs file liens against homeowners; etc.)
+# For everything else (probate, lis pendens, deed-style transfers) the
+# grantor is correct.
+GRANTEE_AS_OWNER = {"JUD", "DRJUD", "LNCORPTX", "LNIRS", "LNMECH", "LNHOA",
+                    "MEDLN", "TAXDEED", "NOC", "NOFC"}
 
 
 # ---------------------------------------------------------------------------
@@ -365,50 +365,77 @@ async def download_parcel_dbf_playwright() -> Optional[Path]:
         ctx = await browser.new_context(user_agent=USER_AGENT, accept_downloads=True)
         page = await ctx.new_page()
         page.set_default_timeout(PW_TIMEOUT)
-        try:
-            await page.goto(PAD_URL, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
-        except Exception as e:
-            log(f"DCAD goto failed: {e}")
-            await browser.close()
-            return None
 
-        # Click any "I agree / continue" buttons
-        for sel in ('button:has-text("Accept")',
-                    'button:has-text("I Agree")',
-                    'button:has-text("Continue")'):
-            try:
-                btn = page.locator(sel).first
-                if await btn.count():
-                    await btn.click(timeout=2500)
-            except Exception:
-                pass
-
-        # Find a download link/button
-        link_sels = [
-            'a:has-text("Public Data")',
-            'a:has-text("Bulk Data")',
-            'a:has-text("Download Data")',
-            'a:has-text("Appraisal Data")',
-            'a[href*="zip" i]',
-            'a[href*=".dbf" i]',
-            'button:has-text("Download Data")',
-        ]
         download_path: Optional[Path] = None
-        for sel in link_sels:
+
+        for url in PAD_URLS:
             try:
-                loc = page.locator(sel).first
-                if not await loc.count():
+                resp = await page.goto(url, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
+                if not resp or resp.status >= 400:
+                    log(f"DCAD {url} -> HTTP {resp.status if resp else 'no response'}; trying next")
                     continue
-                async with page.expect_download(timeout=PW_TIMEOUT) as dl:
-                    await loc.click()
-                d = await dl.value
-                await d.save_as(cache_zip)
-                download_path = cache_zip
-                log(f"DCAD downloaded via {sel}: {cache_zip}")
-                break
             except Exception as e:
-                log(f"DCAD click {sel} failed: {e}")
+                log(f"DCAD goto {url} failed: {e}")
                 continue
+
+            for sel in ('button:has-text("Accept")',
+                        'button:has-text("I Agree")',
+                        'button:has-text("Continue")'):
+                try:
+                    btn = page.locator(sel).first
+                    if await btn.count():
+                        await btn.click(timeout=2500)
+                except Exception:
+                    pass
+
+            # Discover any downloadable links — DBF, ZIP, or specifically "appraisal roll"
+            try:
+                hrefs = await page.eval_on_selector_all(
+                    "a[href]",
+                    "els => els.map(e => ({href: e.href, text: (e.innerText||'').trim()}))",
+                )
+            except Exception:
+                hrefs = []
+            log(f"DCAD {url}: discovered {len(hrefs)} links")
+
+            # Score candidates
+            def score(h):
+                u = (h.get("href") or "").lower()
+                t = (h.get("text") or "").lower()
+                s = 0
+                if u.endswith(".zip"):     s += 5
+                if u.endswith(".dbf"):     s += 6
+                if "appraisal" in t:       s += 3
+                if "roll" in t:            s += 3
+                if "public" in t:          s += 2
+                if "bulk" in t:            s += 2
+                if "parcel" in t:          s += 2
+                if "data" in t:            s += 1
+                if "download" in t:        s += 1
+                if "fee" in t:             s -= 2
+                if "contact" in t:         s -= 5
+                return s
+            hrefs.sort(key=score, reverse=True)
+
+            for h in hrefs[:8]:
+                if score(h) <= 0:
+                    continue
+                try:
+                    async with page.expect_download(timeout=PW_TIMEOUT) as dl:
+                        await page.evaluate(f"window.location.href = {json.dumps(h['href'])}")
+                    d = await dl.value
+                    await d.save_as(cache_zip)
+                    if cache_zip.exists() and cache_zip.stat().st_size >= 1024:
+                        download_path = cache_zip
+                        log(f"DCAD downloaded via {h.get('text') or h.get('href')}: "
+                            f"{cache_zip.stat().st_size:,} bytes")
+                        break
+                except Exception as e:
+                    log(f"DCAD download attempt for {h.get('href')} failed: {e}")
+                    continue
+
+            if download_path:
+                break
 
         await browser.close()
 
@@ -490,6 +517,9 @@ def _build_results_url(query: str, start: str, end: str, page_size: int = 50) ->
         "searchValue": query,
         "recordedDateRange": f"{start},{end}",
         "searchOcrText": "false",
+        "sort": "recordedDate",
+        "sortDirection": "desc",
+        "pageSize": str(page_size),
     }
     return f"{CLERK_URL}/results?{urlencode(params, quote_via=quote)}"
 
@@ -851,8 +881,15 @@ def build_leads(raw_rows: List[Dict[str, str]], parcels: ParcelLookup,
             cat = r.get("_cat", "")
             cat_label = r.get("_cat_label") or DOC_TYPES.get(cat, ("",))[0]
             filed = parse_date(r.get("filed", ""))
-            owner = (r.get("grantor") or "").strip()
-            grantee = (r.get("grantee") or "").strip()
+            grantor_raw = (r.get("grantor") or "").strip()
+            grantee_raw = (r.get("grantee") or "").strip()
+            # For liens / judgments, the GRANTEE is the actual property owner.
+            if cat in GRANTEE_AS_OWNER and grantee_raw:
+                owner = grantee_raw
+                grantee = grantor_raw  # show the creditor in the grantee column
+            else:
+                owner = grantor_raw
+                grantee = grantee_raw
             amount = parse_amount(r.get("amount", ""))
 
             new_this_week = True
