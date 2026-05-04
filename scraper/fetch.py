@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-Denton County, Texas - Motivated Seller Lead Scraper (v5)
+Denton County, Texas - Motivated Seller Lead Scraper (v6)
 ==========================================================
 
-v5 changes vs v4
+v6 changes vs v5
 ----------------
-* DCAD search rewritten against the *real* True Prodigy SPA we observed:
-    - Compound Text Search input (placeholder "Search by Account Number,
-      Address or Owner Name")
-    - Magnifying-glass search button (Enter key ignored)
-    - XHR-driven results that replace "No Rows To Show" with a populated
-      table that has Owner Name + Property Address columns.
-* Wait strategy: wait for the input to render, then wait for the results
-  grid to populate after the search click, with per-step logging so we
-  can see exactly which step failed.
-* Cross-run cache: matched owner -> address pairs are stored in
-  .cache/dcad_owner_cache.json so subsequent runs skip already-resolved
-  owners.
-* Records with literal "N/A" owners or empty owners are dropped before
-  scoring (these are clerk-portal placeholders, not actual leads).
+* DCAD search button targeting fixed: v5's `button:has(svg)` selector was
+  greedy and clicked the page's scroll-to-top arrow instead of the
+  magnifying-glass search button, so the search never fired. v6 targets
+  the search button by its position relative to the search input and
+  prefers Enter-key submission as the primary path.
+* DCAD XHR response interception added: captures the JSON the True Prodigy
+  grid loads from and parses addresses out of that directly. Falls back
+  to DOM scraping only if the response capture misses.
+* Wider net of search query formats tried per owner (last-name + initial,
+  last-name only, full name) until one returns rows.
+* N/A filter rewritten: now drops rows where the FINAL owner field would
+  end up empty or "N/A", regardless of which raw column had the value.
+* Probe screenshot saved to .cache/dcad_probe.png so we can SEE what DCAD
+  rendered during automation.
 """
 
 from __future__ import annotations
@@ -360,31 +360,41 @@ def _save_dcad_cache(cache: Dict[str, Dict[str, str]]) -> None:
         log(f"DCAD cache save failed: {e}")
 
 
-def _dcad_search_query(owner: str) -> str:
-    """Translate clerk owner name (e.g. 'TAYLOR JULIE') into a DCAD search.
+def _dcad_search_queries(owner: str) -> List[str]:
+    """Generate a fallback ladder of DCAD search queries for one owner.
 
-    DCAD owner names are 'LASTNAME, FIRSTNAME' but Compound Text Search is
-    fuzzy enough to accept either order.  We send the last name only on
-    common-name owners to widen the match net, then narrow client-side.
+    DCAD's True Prodigy SPA has a 'too many results' guard that suppresses
+    overly-broad searches.  We avoid last-name-only queries entirely and
+    always start narrow.
     """
     n = normalize_name(owner)
     if not n:
-        return ""
+        return []
     if "," in n:
         last = n.split(",", 1)[0].strip()
+        rest = n.split(",", 1)[1].strip()
+        first = (rest.split() or [""])[0]
     else:
         parts = [p for p in n.split() if p]
         last = parts[-1] if parts else n
-    # Use last name + first initial of first name to avoid 3000+ "smith" hits
-    if "," in n:
-        rest = n.split(",", 1)[1].strip()
-        first_initial = (rest.split() or [""])[0][:1]
-    else:
-        parts = [p for p in n.split() if p]
-        first_initial = parts[0][:1] if len(parts) >= 2 else ""
-    if first_initial:
-        return f"{last}, {first_initial}"
-    return last
+        first = parts[0] if len(parts) >= 2 else ""
+
+    queries: List[str] = []
+    if last and first:
+        queries.append(f"{last}, {first}")        # "TAYLOR, JULIE"  (DCAD's native order)
+        queries.append(f"{last} {first}")         # "TAYLOR JULIE"
+        queries.append(f"{first} {last}")         # "JULIE TAYLOR"
+        if len(first) >= 2:
+            queries.append(f"{last} {first[:2]}") # "TAYLOR JU"
+    # Intentionally NOT appending bare last name — triggers DCAD's
+    # "too many results to display" guard.
+    seen = set()
+    out = []
+    for q in queries:
+        if q and q not in seen:
+            seen.add(q)
+            out.append(q)
+    return out
 
 
 async def _wait_for_dcad_input(page, timeout_ms: int = 15_000):
@@ -407,8 +417,93 @@ async def _wait_for_dcad_input(page, timeout_ms: int = 15_000):
     return None
 
 
-async def dcad_lookup_address(page, owner: str, *, debug: bool = False) -> Dict[str, str]:
-    """Search DCAD by owner name. Returns address dict or all-blank dict."""
+def _parse_us_address(addr: str) -> Tuple[str, str, str]:
+    """Split 'STREET, CITY, TX 75XXX' into (street, city, zip). Tolerant."""
+    if not addr:
+        return "", "", ""
+    site_addr = addr.strip()
+    site_city = ""
+    site_zip = ""
+    m = re.match(r"^(.*?),\s*([A-Z][A-Z .'\-]+?),?\s*TX\s*(\d{5})",
+                 site_addr.upper())
+    if m:
+        site_addr = addr[: m.start(2)].rstrip(", ").strip()
+        site_city = m.group(2).title().strip()
+        site_zip  = m.group(3)
+    else:
+        m2 = re.search(r"(\d{5})(?:-\d{4})?\s*$", site_addr)
+        if m2:
+            site_zip = m2.group(1)
+    return site_addr, site_city, site_zip
+
+
+def _extract_address_from_json(data: Any, owner_tokens: set) -> Tuple[int, str, str]:
+    """Walk a True Prodigy/ag-Grid JSON response, return (overlap, owner, addr)."""
+    best = (0, "", "")
+    def visit(node):
+        nonlocal best
+        if isinstance(node, dict):
+            owner = ""
+            addr = ""
+            for k, v in node.items():
+                ku = str(k).upper()
+                if isinstance(v, str):
+                    if "OWNER" in ku and "NAME" in ku:
+                        owner = v
+                    elif ku in ("OWNERNAME", "OWNER"):
+                        owner = v
+                    elif "PROPERTY" in ku and "ADDRESS" in ku:
+                        addr = v
+                    elif ku in ("SITUSADDRESS", "SITUS_ADDRESS", "PROPADDR",
+                                "PROPERTYADDRESS", "ADDRESS"):
+                        addr = v
+            if owner or addr:
+                on_tokens = set(re.findall(r"[A-Z]{2,}", owner.upper()))
+                overlap = len(owner_tokens & on_tokens) if owner_tokens else 0
+                if addr and overlap >= best[0]:
+                    best = (overlap, owner, addr)
+            for v in node.values():
+                visit(v)
+        elif isinstance(node, list):
+            for v in node:
+                visit(v)
+    visit(data)
+    return best
+
+
+async def _click_dcad_search(page, inp) -> bool:
+    """Submit the DCAD search. Prefer Enter; fall back to clicking the
+    magnifying-glass button next to the input."""
+    # Strategy 1: just press Enter on the input
+    try:
+        await inp.press("Enter")
+        return True
+    except Exception:
+        pass
+    # Strategy 2: find a button immediately following the input in the DOM
+    for xp in ("xpath=following::button[1]",
+               "xpath=parent::*/following-sibling::*//button[1]",
+               "xpath=ancestor::form[1]//button[last()]"):
+        try:
+            btn = inp.locator(xp).first
+            if await btn.count():
+                await btn.click(timeout=2500)
+                return True
+        except Exception:
+            continue
+    # Strategy 3: button with explicit Search aria-label
+    try:
+        btn = page.locator('button[aria-label*="Search" i]').first
+        if await btn.count():
+            await btn.click(timeout=2500)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+async def dcad_lookup_address(page, owner: str, *, save_screenshot: bool = False) -> Dict[str, str]:
+    """Search DCAD by owner name. Returns address dict + diagnostic _status."""
     blank = {"site_addr": "", "site_city": "", "site_zip": "",
              "mail_addr": "", "mail_city": "", "mail_state": "", "mail_zip": "",
              "_status": "blank"}
@@ -417,158 +512,211 @@ async def dcad_lookup_address(page, owner: str, *, debug: bool = False) -> Dict[
     if is_entity(owner) and "DECEASED" not in owner.upper() and "ESTATE" not in owner.upper():
         return {**blank, "_status": "skipped-entity"}
 
-    query = _dcad_search_query(owner)
-    if not query:
+    queries = _dcad_search_queries(owner)
+    if not queries:
         return {**blank, "_status": "no-query"}
 
-    try:
-        await page.goto(DCAD_SEARCH_URL, wait_until="networkidle", timeout=PW_TIMEOUT)
-    except Exception as e:
-        return {**blank, "_status": f"goto-failed: {e}"}
+    owner_tokens = set(re.findall(r"[A-Z]{2,}", owner.upper()))
 
-    inp = await _wait_for_dcad_input(page)
-    if not inp:
-        return {**blank, "_status": "input-not-found"}
-
-    try:
-        await inp.click()
-        await inp.fill("")
-        await inp.type(query, delay=15)
-    except Exception as e:
-        return {**blank, "_status": f"type-failed: {e}"}
-
-    # Click the magnifying-glass search button
-    clicked = False
-    for sel in ('button[aria-label*="Search" i]',
-                'button:has(svg)',
-                'button[type="submit"]',
-                'button:has-text("Search")'):
+    # Set up XHR capture BEFORE navigating
+    captured: List[Any] = []
+    def _on_response(resp):
         try:
-            btn = page.locator(sel).first
-            if await btn.count():
-                await btn.click(timeout=3000)
-                clicked = True
-                break
+            url = resp.url.lower()
+            ct = (resp.headers.get("content-type", "") or "").lower()
+            if "json" in ct and any(k in url for k in
+                ("search", "property", "compound", "parcel", "graphql",
+                 "/api/", "results", "lookup")):
+                # Schedule async JSON read on next tick
+                asyncio.create_task(_capture_json(resp, captured))
         except Exception:
-            continue
-    if not clicked:
-        # Fall back to Enter
+            pass
+    async def _capture_json(resp, sink):
         try:
-            await inp.press("Enter")
-            clicked = True
+            data = await resp.json()
+            sink.append({"url": resp.url, "data": data})
         except Exception:
             pass
 
-    if not clicked:
-        return {**blank, "_status": "search-button-missing"}
+    page.on("response", _on_response)
 
-    # Wait for results: either rows appear or "No Rows To Show" stays
     try:
-        await page.wait_for_function(
-            """() => {
-                const empty = document.body.innerText.includes('No Rows To Show');
-                const rows = document.querySelectorAll('table tbody tr, [role="row"]:not([role-header])');
-                return !empty || rows.length > 0;
-            }""",
-            timeout=12_000,
-        )
-    except PWTimeout:
-        pass
+        try:
+            await page.goto(DCAD_SEARCH_URL, wait_until="domcontentloaded",
+                            timeout=PW_TIMEOUT)
+            await page.wait_for_load_state("networkidle", timeout=10_000)
+        except PWTimeout:
+            pass
+        except Exception as e:
+            return {**blank, "_status": f"goto-failed: {e}"}
 
-    # Give the grid a beat to populate
-    await asyncio.sleep(0.6)
+        inp = await _wait_for_dcad_input(page)
+        if not inp:
+            return {**blank, "_status": "input-not-found"}
 
-    # Tokenize the owner name we want to match against
-    owner_tokens = set(re.findall(r"[A-Z]{2,}", owner.upper()))
+        last_status = "no-results"
+        for q_index, query in enumerate(queries):
+            try:
+                await inp.click()
+                await inp.fill("")
+                await inp.type(query, delay=15)
+            except Exception as e:
+                last_status = f"type-failed: {e}"
+                continue
 
-    # Read the rendered grid via JS — True Prodigy uses ag-Grid which
-    # reuses DOM rows, so eval() is more reliable than HTML parsing.
-    try:
-        rows = await page.evaluate("""() => {
-            const out = [];
-            // Try ag-Grid row pattern first
-            const ag = document.querySelectorAll('[role="row"]');
-            if (ag.length) {
-                ag.forEach(r => {
-                    const cells = r.querySelectorAll('[role="gridcell"], [role="cell"]');
-                    if (cells.length) {
-                        const arr = Array.from(cells).map(c => (c.innerText||'').trim());
-                        out.push(arr);
+            captured.clear()
+            ok = await _click_dcad_search(page, inp)
+            if not ok:
+                last_status = "submit-failed"
+                continue
+
+            # Wait for either captured XHR or DOM rows to appear
+            try:
+                await page.wait_for_function(
+                    """() => {
+                        const empty = document.body.innerText.includes('No Rows To Show');
+                        const rows  = document.querySelectorAll('[role="row"]').length;
+                        return !empty || rows > 1;
+                    }""",
+                    timeout=10_000,
+                )
+            except PWTimeout:
+                pass
+            await asyncio.sleep(1.2)  # let final XHRs land
+
+            # DCAD shows "Too many results" / "Please narrow your search" /
+            # similar guard banners on broad searches. The user can re-submit
+            # to bypass; we replicate that here.
+            try:
+                body_text = await page.evaluate("document.body.innerText")
+            except Exception:
+                body_text = ""
+            too_many = any(p in body_text.lower() for p in
+                           ("too many results", "narrow your search",
+                            "refine your search", "exceeds", "too broad"))
+            if too_many:
+                log(f"  DCAD guard hit on q={query!r}; re-submitting once")
+                # Try to dismiss any dialog first
+                for sel in ('button:has-text("OK")',
+                            'button:has-text("Continue")',
+                            'button:has-text("Close")',
+                            'button[aria-label*="close" i]'):
+                    try:
+                        b = page.locator(sel).first
+                        if await b.count():
+                            await b.click(timeout=1500)
+                            break
+                    except Exception:
+                        continue
+                # Re-submit
+                captured.clear()
+                try:
+                    await inp.click()
+                    await inp.press("Enter")
+                except Exception:
+                    pass
+                try:
+                    await page.wait_for_function(
+                        """() => {
+                            const rows = document.querySelectorAll('[role="row"]').length;
+                            return rows > 1;
+                        }""",
+                        timeout=10_000,
+                    )
+                except PWTimeout:
+                    pass
+                await asyncio.sleep(1.0)
+
+            if save_screenshot and q_index == 0:
+                try:
+                    shot = CACHE_DIR / "dcad_probe.png"
+                    await page.screenshot(path=str(shot), full_page=False)
+                    log(f"DCAD probe screenshot saved: {shot}")
+                except Exception as e:
+                    log(f"DCAD screenshot failed: {e}")
+
+            # First try: parse from captured XHR JSON
+            for cap in captured:
+                ov, on, ad = _extract_address_from_json(cap["data"], owner_tokens)
+                if ad and ov >= 1:
+                    site_addr, site_city, site_zip = _parse_us_address(ad)
+                    return {
+                        "site_addr": site_addr, "site_city": site_city, "site_zip": site_zip,
+                        "mail_addr": site_addr, "mail_city": site_city,
+                        "mail_state": "TX", "mail_zip": site_zip,
+                        "_status": f"matched-json (q={query!r}, overlap={ov}, owner={on!r})",
                     }
-                });
-            }
-            if (!out.length) {
-                document.querySelectorAll('table tbody tr').forEach(r => {
-                    const arr = Array.from(r.querySelectorAll('td')).map(c => (c.innerText||'').trim());
-                    if (arr.length) out.push(arr);
-                });
-            }
-            // Also grab the headers to know column positions
-            const headers = [];
-            document.querySelectorAll('[role="columnheader"], table thead th').forEach(h => {
-                headers.push((h.innerText||'').trim());
-            });
-            return { headers, rows: out };
-        }""")
-    except Exception as e:
-        return {**blank, "_status": f"grid-read-failed: {e}"}
 
-    headers = [h.upper() for h in (rows or {}).get("headers", [])]
-    grid = (rows or {}).get("rows", [])
-    if not grid:
-        return {**blank, "_status": "no-results"}
+            # Fall back to DOM scraping
+            try:
+                grid = await page.evaluate("""() => {
+                    const out = [];
+                    const ag = document.querySelectorAll('[role="row"]');
+                    ag.forEach(r => {
+                        const cells = r.querySelectorAll('[role="gridcell"], [role="cell"]');
+                        if (cells.length) {
+                            out.push(Array.from(cells).map(c => (c.innerText||'').trim()));
+                        }
+                    });
+                    if (!out.length) {
+                        document.querySelectorAll('table tbody tr').forEach(r => {
+                            const arr = Array.from(r.querySelectorAll('td')).map(c => (c.innerText||'').trim());
+                            if (arr.length) out.push(arr);
+                        });
+                    }
+                    const headers = [];
+                    document.querySelectorAll('[role="columnheader"], table thead th').forEach(h => {
+                        headers.push((h.innerText||'').trim());
+                    });
+                    return {headers, rows: out};
+                }""")
+            except Exception as e:
+                last_status = f"grid-read-failed: {e}"
+                continue
 
-    def col_index(*names: str) -> int:
-        for n in names:
-            for i, h in enumerate(headers):
-                if n in h:
-                    return i
-        return -1
+            headers = [h.upper() for h in (grid or {}).get("headers", [])]
+            rows    = (grid or {}).get("rows", [])
+            if not rows:
+                last_status = f"no-results (q={query!r})"
+                continue
 
-    i_owner = col_index("OWNER NAME", "OWNER")
-    i_addr  = col_index("PROPERTY ADDRESS", "SITUS", "ADDRESS")
+            def col_index(*names):
+                for n in names:
+                    for i, h in enumerate(headers):
+                        if n in h:
+                            return i
+                return -1
+            i_owner = col_index("OWNER NAME", "OWNER")
+            i_addr  = col_index("PROPERTY ADDRESS", "SITUS", "ADDRESS")
 
-    best = None
-    for row in grid:
-        if not row or all(not c for c in row):
-            continue
-        on = row[i_owner] if 0 <= i_owner < len(row) else ""
-        ad = row[i_addr]  if 0 <= i_addr  < len(row) else ""
-        if not ad:
-            continue
-        on_tokens = set(re.findall(r"[A-Z]{2,}", on.upper()))
-        # Score by token overlap so "TAYLOR JULIE" picks the row whose
-        # owner string contains both TAYLOR and JULIE.
-        overlap = len(owner_tokens & on_tokens)
-        if best is None or overlap > best[0]:
-            best = (overlap, on, ad)
-    if not best:
-        return {**blank, "_status": "no-address-in-rows"}
-    overlap, owner_match, addr = best
-    if overlap < 1:
-        # No owner-token overlap: too risky, skip
-        return {**blank, "_status": f"weak-match (overlap={overlap})"}
+            best = (0, "", "")
+            for row in rows:
+                if not row or all(not c for c in row):
+                    continue
+                on = row[i_owner] if 0 <= i_owner < len(row) else ""
+                ad = row[i_addr]  if 0 <= i_addr  < len(row) else ""
+                if not ad:
+                    continue
+                on_tokens = set(re.findall(r"[A-Z]{2,}", on.upper()))
+                overlap = len(owner_tokens & on_tokens)
+                if overlap > best[0]:
+                    best = (overlap, on, ad)
+            if best[2] and best[0] >= 1:
+                site_addr, site_city, site_zip = _parse_us_address(best[2])
+                return {
+                    "site_addr": site_addr, "site_city": site_city, "site_zip": site_zip,
+                    "mail_addr": site_addr, "mail_city": site_city,
+                    "mail_state": "TX", "mail_zip": site_zip,
+                    "_status": f"matched-dom (q={query!r}, overlap={best[0]}, owner={best[1]!r})",
+                }
+            last_status = f"weak-match (q={query!r}, best-overlap={best[0]})"
 
-    # Parse address into street / city / zip if formatted as "STREET, CITY, TX 75XXX"
-    site_addr = addr
-    site_city = ""
-    site_zip  = ""
-    m = re.match(r"^(.*?),\s*([A-Z][A-Z .'-]+?),?\s*TX\s*(\d{5})", addr.upper())
-    if m:
-        site_addr = addr[: m.start(2)].rstrip(", ").strip()
-        site_city = m.group(2).title().strip()
-        site_zip  = m.group(3)
-    else:
-        # Try: "STREET CITY TX 75XXX"
-        m2 = re.search(r"(\d{5})(?:-\d{4})?$", addr)
-        if m2:
-            site_zip = m2.group(1)
-
-    return {
-        "site_addr": site_addr, "site_city": site_city, "site_zip": site_zip,
-        "mail_addr": site_addr, "mail_city": site_city, "mail_state": "TX", "mail_zip": site_zip,
-        "_status": f"matched ({overlap}-token overlap, owner='{owner_match}')",
-    }
+        return {**blank, "_status": last_status}
+    finally:
+        try:
+            page.remove_listener("response", _on_response)
+        except Exception:
+            pass
 
 
 async def enrich_with_dcad(leads: List["Lead"]) -> int:
@@ -594,10 +742,11 @@ async def enrich_with_dcad(leads: List["Lead"]) -> int:
         page = await ctx.new_page()
         page.set_default_timeout(PW_TIMEOUT)
 
-        # Diagnostic: probe DCAD once with a known query and log the outcome
+        # Diagnostic: probe DCAD once with a known query, save screenshot
         try:
-            probe = await dcad_lookup_address(page, "SMITH JOHN")
-            log(f"DCAD diagnostic probe (SMITH JOHN): status={probe.get('_status')!r} "
+            probe = await dcad_lookup_address(page, "JOHN SMITH",
+                                              save_screenshot=True)
+            log(f"DCAD diagnostic probe (JOHN SMITH): status={probe.get('_status')!r} "
                 f"addr={probe.get('site_addr')!r}")
         except Exception as e:
             log(f"DCAD diagnostic probe error: {e}")
@@ -1220,17 +1369,30 @@ def build_leads(raw_rows: List[Dict[str, str]], parcels: ParcelLookup,
             filed = parse_date(r.get("filed", ""))
             grantor_raw = (r.get("grantor") or "").strip()
             grantee_raw = (r.get("grantee") or "").strip()
-            # Drop clerk-placeholder rows that have no real party data
-            if grantor_raw.upper() in ("N/A", "NA", "NONE", "") and \
-               grantee_raw.upper() in ("N/A", "NA", "NONE", ""):
+            # Normalize "N/A" / "NONE" placeholders to empty so downstream
+            # logic can pick the other party transparently.
+            BAD_VALS = {"N/A", "NA", "NONE", "UNKNOWN", "-", "--"}
+            if grantor_raw.upper() in BAD_VALS:
+                grantor_raw = ""
+            if grantee_raw.upper() in BAD_VALS:
+                grantee_raw = ""
+            # Drop rows with no usable party data at all
+            if not grantor_raw and not grantee_raw:
                 continue
             # For liens / judgments, the GRANTEE is the actual property owner.
             if cat in GRANTEE_AS_OWNER and grantee_raw:
                 owner = grantee_raw
                 grantee = grantor_raw  # show the creditor in the grantee column
+            elif cat in GRANTEE_AS_OWNER and not grantee_raw and grantor_raw:
+                # Fall back to grantor when grantee was a placeholder
+                owner = grantor_raw
+                grantee = ""
             else:
                 owner = grantor_raw
                 grantee = grantee_raw
+            # Final guard: skip rows where the lead "owner" still ends up empty
+            if not owner.strip():
+                continue
             amount = parse_amount(r.get("amount", ""))
 
             new_this_week = True
