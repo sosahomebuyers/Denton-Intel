@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-07-05T09:54:57+00:00",
+  "fetched_at": "2026-07-06T11:40:18+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-06-28",
-    "end": "2026-07-05"
+    "start": "2026-06-29",
+    "end": "2026-07-06"
   },
-  "total": 153,
-  "with_address": 57,
+  "total": 156,
+  "with_address": 58,
   "records": [
     {
       "doc_num": "2026-75315",
@@ -909,6 +909,31 @@
       "score": 50
     },
     {
+      "doc_num": "2026-75999",
+      "doc_type": "RELEASE OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-06-29",
+      "owner": "FATONE GABRIELA",
+      "grantee": "DEPARTMENT STORES NATIONAL BANK",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "1140 PIANZOLA WAY",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "1140 PIANZOLA WAY",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
       "doc_num": "2026-76002",
       "doc_type": "ABSTRACT OF JUDGMENT",
       "cat": "JUD",
@@ -1709,6 +1734,32 @@
       "flags": [
         "Judgment lien",
         "New this week"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-75643",
+      "doc_type": "RELEASE OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-06-29",
+      "owner": "KANSAS ASPHALT INC",
+      "grantee": "DENTON COUNTY",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week",
+        "LLC / corp owner"
       ],
       "score": 45
     },
@@ -2936,6 +2987,31 @@
         "Mechanic lien",
         "New this week",
         "LLC / corp owner"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-75922",
+      "doc_type": "RELEASE OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-06-29",
+      "owner": "KEANE CHRISTIANE HEIDRUN",
+      "grantee": "SCHWAB RYAN ANDREW",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
       ],
       "score": 45
     },
