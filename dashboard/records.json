@@ -1,9 +1,9 @@
 {
-  "fetched_at": "2026-07-12T09:23:54+00:00",
+  "fetched_at": "2026-07-13T10:44:43+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-07-05",
-    "end": "2026-07-12"
+    "start": "2026-07-06",
+    "end": "2026-07-13"
   },
   "total": 223,
   "with_address": 66,
@@ -2998,6 +2998,31 @@
       "score": 45
     },
     {
+      "doc_num": "2026-79296",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-07-07",
+      "owner": "AGUILAR JONATHAN",
+      "grantee": "AMERICAN EXPRESS NATIONAL BANK",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-79297",
       "doc_type": "ABSTRACT OF JUDGMENT",
       "cat": "JUD",
@@ -3148,32 +3173,6 @@
       "score": 45
     },
     {
-      "doc_num": "2026-79333",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-07-07",
-      "owner": "RAW EQUITY GROUP LLC",
-      "grantee": "HOWARD DUSTIN",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week",
-        "LLC / corp owner"
-      ],
-      "score": 45
-    },
-    {
       "doc_num": "2026-79355",
       "doc_type": "ABSTRACT OF JUDGMENT",
       "cat": "JUD",
@@ -3299,6 +3298,31 @@
       "score": 45
     },
     {
+      "doc_num": "2026-79464",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-07-07",
+      "owner": "RODRIGUEZ DANIEL",
+      "grantee": "GAFFORD VINCENT",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-79488",
       "doc_type": "MECHANIC'S LIEN CONTRACT",
       "cat": "LNMECH",
@@ -3355,6 +3379,31 @@
       "cat_label": "Judgment",
       "filed": "2026-07-07",
       "owner": "WILLIAMS CHET L",
+      "grantee": "JPMORGAN CHASE BANK NA",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-79507",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-07-07",
+      "owner": "SANCHEZ GERMAN",
       "grantee": "JPMORGAN CHASE BANK NA",
       "amount": 0.0,
       "legal": "N/A",
@@ -5119,31 +5168,6 @@
       "score": 45
     },
     {
-      "doc_num": "2026-80341",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-07-08",
-      "owner": "SIMS DEMETRICE",
-      "grantee": "SOARION CREDIT UNION",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
       "doc_num": "2026-80386",
       "doc_type": "AFFIDAVIT OF HEIRSHIP",
       "cat": "PRO",
@@ -5241,32 +5265,6 @@
       "flags": [
         "Judgment lien",
         "New this week"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-80496",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-07-09",
-      "owner": "3 KINGS GENERAL CONTRACTING LLC",
-      "grantee": "PLAINS PROPERTIES LLC",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week",
-        "LLC / corp owner"
       ],
       "score": 45
     },
