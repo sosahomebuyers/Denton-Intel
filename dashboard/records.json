@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-07-25T09:22:00+00:00",
+  "fetched_at": "2026-07-26T09:30:07+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-07-18",
-    "end": "2026-07-25"
+    "start": "2026-07-19",
+    "end": "2026-07-26"
   },
   "total": 231,
-  "with_address": 86,
+  "with_address": 85,
   "records": [
     {
       "doc_num": "2026-84529",
@@ -54,31 +54,6 @@
       "clerk_url": "",
       "flags": [
         "Mechanic lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
-      "doc_num": "2026-84558",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-07-20",
-      "owner": "BOTHROYD MEGAN A",
-      "grantee": "HARVEST RESIDENTIAL COMMUNITY ASN INC",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "812 FALCON RD",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "812 FALCON RD",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
         "New this week"
       ],
       "score": 50
@@ -388,31 +363,6 @@
       "score": 50
     },
     {
-      "doc_num": "2026-85259",
-      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
-      "cat": "LNHOA",
-      "cat_label": "HOA Lien",
-      "filed": "2026-07-20",
-      "owner": "BADER STEVEN",
-      "grantee": "CASTLE HILLS RESIDENTIAL ASN INC",
-      "amount": 0.0,
-      "legal": "Subdivision - Name: CASTLE HILLS VILLAGE RETAIL RESIDEN Lot: 1 Reference - 121825/2004",
-      "prop_address": "809 SIR GALAHAD LN",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "809 SIR GALAHAD LN",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Mechanic lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
       "doc_num": "2026-85261",
       "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
       "cat": "LNHOA",
@@ -713,31 +663,6 @@
       "score": 50
     },
     {
-      "doc_num": "2026-85687",
-      "doc_type": "FEDERAL TAX LIEN",
-      "cat": "LNIRS",
-      "cat_label": "Federal/IRS Tax Lien",
-      "filed": "2026-07-21",
-      "owner": "DIMON JERRY",
-      "grantee": "U S A INTERNAL REVENUE SERVICE",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "3033 TAOS TRL",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "3033 TAOS TRL",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
       "doc_num": "2026-85690",
       "doc_type": "FEDERAL TAX LIEN",
       "cat": "LNIRS",
@@ -777,6 +702,31 @@
       "prop_state": "TX",
       "prop_zip": "",
       "mail_address": "263 ABERDEEN BLVD",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-85693",
+      "doc_type": "FEDERAL TAX LIEN",
+      "cat": "LNIRS",
+      "cat_label": "Federal/IRS Tax Lien",
+      "filed": "2026-07-21",
+      "owner": "SLOUGH MARK R",
+      "grantee": "U S A INTERNAL REVENUE SERVICE",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "5508 PARKPLACE DR",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "5508 PARKPLACE DR",
       "mail_city": "",
       "mail_state": "TX",
       "mail_zip": "",
@@ -938,6 +888,31 @@
       "score": 50
     },
     {
+      "doc_num": "2026-85727",
+      "doc_type": "FEDERAL TAX LIEN",
+      "cat": "LNIRS",
+      "cat_label": "Federal/IRS Tax Lien",
+      "filed": "2026-07-21",
+      "owner": "SAGERSON STEVE",
+      "grantee": "U S A INTERNAL REVENUE SERVICE",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "1600 KNOLL RIDGE CIR",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "1600 KNOLL RIDGE CIR",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
       "doc_num": "2026-85729",
       "doc_type": "FEDERAL TAX LIEN",
       "cat": "LNIRS",
@@ -1008,31 +983,6 @@
       "clerk_url": "",
       "flags": [
         "Tax lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
-      "doc_num": "2026-85741",
-      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
-      "cat": "LNHOA",
-      "cat_label": "HOA Lien",
-      "filed": "2026-07-21",
-      "owner": "SWAFFORD BRIAN",
-      "grantee": "CASTLE HILLS RESIDENTIAL ASN INC",
-      "amount": 0.0,
-      "legal": "Subdivision - Name: CASTLE HILLS II D Lot: 8 Block: B Reference - R/360",
-      "prop_address": "2628 CAMILLE DR",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "2628 CAMILLE DR",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Mechanic lien",
         "New this week"
       ],
       "score": 50
@@ -1202,6 +1152,31 @@
       "prop_state": "TX",
       "prop_zip": "",
       "mail_address": "2800 N UMBERLAND DR",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Mechanic lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-85770",
+      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
+      "cat": "LNHOA",
+      "cat_label": "HOA Lien",
+      "filed": "2026-07-21",
+      "owner": "PFEIL DANIEL PAUL",
+      "grantee": "CASTLE HILLS RESIDENTIAL ASN INC",
+      "amount": 0.0,
+      "legal": "Subdivision - Name: CASTLE HILLS 10 LEWISVILLE ADDN Lot: 20 Block: A Reference - 61/2019",
+      "prop_address": "3500 DAMSEL BROOKE ST",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "3500 DAMSEL BROOKE ST",
       "mail_city": "",
       "mail_state": "TX",
       "mail_zip": "",
@@ -2238,6 +2213,56 @@
       "score": 45
     },
     {
+      "doc_num": "2026-84545",
+      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
+      "cat": "LNHOA",
+      "cat_label": "HOA Lien",
+      "filed": "2026-07-20",
+      "owner": "MERUPATI VIJAY SHANKAR REDDY",
+      "grantee": "VALDES ALEX S ATTORNEY",
+      "amount": 0.0,
+      "legal": "Subdivision - Name: WINDSONG RANCH 6B Lot: 6 Block: C Reference - 124/2021",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Mechanic lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-84558",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-07-20",
+      "owner": "BOTHROYD MEGAN A",
+      "grantee": "HARVEST RESIDENTIAL COMMUNITY ASN INC",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-84713",
       "doc_type": "RELEASE OF JUDGMENT",
       "cat": "JUD",
@@ -3025,6 +3050,31 @@
       "score": 45
     },
     {
+      "doc_num": "2026-85687",
+      "doc_type": "FEDERAL TAX LIEN",
+      "cat": "LNIRS",
+      "cat_label": "Federal/IRS Tax Lien",
+      "filed": "2026-07-21",
+      "owner": "DIMON JERRY",
+      "grantee": "U S A INTERNAL REVENUE SERVICE",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-85688",
       "doc_type": "FEDERAL TAX LIEN",
       "cat": "LNIRS",
@@ -3082,31 +3132,6 @@
       "cat_label": "Federal/IRS Tax Lien",
       "filed": "2026-07-21",
       "owner": "SPARLIN JOSEPH W II",
-      "grantee": "U S A INTERNAL REVENUE SERVICE",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-85693",
-      "doc_type": "FEDERAL TAX LIEN",
-      "cat": "LNIRS",
-      "cat_label": "Federal/IRS Tax Lien",
-      "filed": "2026-07-21",
-      "owner": "SLOUGH MARK R",
       "grantee": "U S A INTERNAL REVENUE SERVICE",
       "amount": 0.0,
       "legal": "N/A",
@@ -3651,31 +3676,6 @@
         "Tax lien",
         "New this week",
         "LLC / corp owner"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-85727",
-      "doc_type": "FEDERAL TAX LIEN",
-      "cat": "LNIRS",
-      "cat_label": "Federal/IRS Tax Lien",
-      "filed": "2026-07-21",
-      "owner": "SAGERSON STEVE",
-      "grantee": "U S A INTERNAL REVENUE SERVICE",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
       ],
       "score": 45
     },
