@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-07-26T09:30:07+00:00",
+  "fetched_at": "2026-07-27T10:58:54+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-07-19",
-    "end": "2026-07-26"
+    "start": "2026-07-20",
+    "end": "2026-07-27"
   },
   "total": 231,
-  "with_address": 85,
+  "with_address": 87,
   "records": [
     {
       "doc_num": "2026-84529",
@@ -54,6 +54,31 @@
       "clerk_url": "",
       "flags": [
         "Mechanic lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-84558",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-07-20",
+      "owner": "BOTHROYD MEGAN A",
+      "grantee": "HARVEST RESIDENTIAL COMMUNITY ASN INC",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "812 FALCON RD",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "812 FALCON RD",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
         "New this week"
       ],
       "score": 50
@@ -658,6 +683,31 @@
       "clerk_url": "",
       "flags": [
         "Judgment lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-85687",
+      "doc_type": "FEDERAL TAX LIEN",
+      "cat": "LNIRS",
+      "cat_label": "Federal/IRS Tax Lien",
+      "filed": "2026-07-21",
+      "owner": "DIMON JERRY",
+      "grantee": "U S A INTERNAL REVENUE SERVICE",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "3033 TAOS TRL",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "3033 TAOS TRL",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
         "New this week"
       ],
       "score": 50
@@ -2238,31 +2288,6 @@
       "score": 45
     },
     {
-      "doc_num": "2026-84558",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-07-20",
-      "owner": "BOTHROYD MEGAN A",
-      "grantee": "HARVEST RESIDENTIAL COMMUNITY ASN INC",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
       "doc_num": "2026-84713",
       "doc_type": "RELEASE OF JUDGMENT",
       "cat": "JUD",
@@ -3031,31 +3056,6 @@
       "cat_label": "Federal/IRS Tax Lien",
       "filed": "2026-07-21",
       "owner": "SPENCER REGINALD",
-      "grantee": "U S A INTERNAL REVENUE SERVICE",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-85687",
-      "doc_type": "FEDERAL TAX LIEN",
-      "cat": "LNIRS",
-      "cat_label": "Federal/IRS Tax Lien",
-      "filed": "2026-07-21",
-      "owner": "DIMON JERRY",
       "grantee": "U S A INTERNAL REVENUE SERVICE",
       "amount": 0.0,
       "legal": "N/A",
