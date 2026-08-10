@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-08-09T08:11:22+00:00",
+  "fetched_at": "2026-08-10T08:43:38+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-08-02",
-    "end": "2026-08-09"
+    "start": "2026-08-03",
+    "end": "2026-08-10"
   },
   "total": 211,
-  "with_address": 67,
+  "with_address": 69,
   "records": [
     {
       "doc_num": "2026-91009",
@@ -1159,6 +1159,31 @@
       "score": 50
     },
     {
+      "doc_num": "2026-92573",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-08-06",
+      "owner": "SHEPHERD LINDSAY",
+      "grantee": "SYNCHRONY BANK",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "2524 LIBERTY LN",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "2524 LIBERTY LN",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
       "doc_num": "2026-92672",
       "doc_type": "ABSTRACT OF JUDGMENT",
       "cat": "JUD",
@@ -1498,6 +1523,31 @@
       "prop_state": "TX",
       "prop_zip": "",
       "mail_address": "4221 MEDICAL PKWY",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-92946",
+      "doc_type": "STATE TAX LIEN",
+      "cat": "LNCORPTX",
+      "cat_label": "State Tax Lien",
+      "filed": "2026-08-06",
+      "owner": "CHEKURTHY SURENDER",
+      "grantee": "TEXAS STATE OF",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "913 FLETCHER ST",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "913 FLETCHER ST",
       "mail_city": "",
       "mail_state": "TX",
       "mail_zip": "",
@@ -3281,31 +3331,6 @@
       "score": 45
     },
     {
-      "doc_num": "2026-92573",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-08-06",
-      "owner": "SHEPHERD LINDSAY",
-      "grantee": "SYNCHRONY BANK",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
       "doc_num": "2026-92644",
       "doc_type": "MECHANIC'S LIEN CONTRACT",
       "cat": "LNMECH",
@@ -4813,31 +4838,6 @@
         "Tax lien",
         "New this week",
         "LLC / corp owner"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-92946",
-      "doc_type": "STATE TAX LIEN",
-      "cat": "LNCORPTX",
-      "cat_label": "State Tax Lien",
-      "filed": "2026-08-06",
-      "owner": "CHEKURTHY SURENDER",
-      "grantee": "TEXAS STATE OF",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
       ],
       "score": 45
     },
