@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-08-16T07:49:11+00:00",
+  "fetched_at": "2026-08-17T08:09:24+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-08-09",
-    "end": "2026-08-16"
+    "start": "2026-08-10",
+    "end": "2026-08-17"
   },
   "total": 200,
-  "with_address": 79,
+  "with_address": 75,
   "records": [
     {
       "doc_num": "2026-93732",
@@ -523,31 +523,6 @@
       "prop_state": "TX",
       "prop_zip": "",
       "mail_address": "12204 LAKESHORE CT",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Tax lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
-      "doc_num": "2026-94734",
-      "doc_type": "FEDERAL TAX LIEN",
-      "cat": "LNIRS",
-      "cat_label": "Federal/IRS Tax Lien",
-      "filed": "2026-08-11",
-      "owner": "HOFSTADTER BRENEN M",
-      "grantee": "U S A INTERNAL REVENUE SERVICE",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "5249 NORTHSHORE DR",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "5249 NORTHSHORE DR",
       "mail_city": "",
       "mail_state": "TX",
       "mail_zip": "",
@@ -1084,56 +1059,6 @@
       "score": 50
     },
     {
-      "doc_num": "2026-95311",
-      "doc_type": "AFFIDAVIT OF HEIRSHIP",
-      "cat": "PRO",
-      "cat_label": "Probate",
-      "filed": "2026-08-12",
-      "owner": "JAIRD CYNTHIA A",
-      "grantee": "JAIRD MATTHEW A DECEASED",
-      "amount": 0.0,
-      "legal": "Subdivision - Name: THOUSAND OAKS ADDN 1 Lot: 30 Block: G Reference - I/308",
-      "prop_address": "320 STATELY OAK LN",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "320 STATELY OAK LN",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Probate / estate",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
-      "doc_num": "2026-95320",
-      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
-      "cat": "LNHOA",
-      "cat_label": "HOA Lien",
-      "filed": "2026-08-12",
-      "owner": "MAY BENNY",
-      "grantee": "HAYS CLINT",
-      "amount": 0.0,
-      "legal": "Subdivision - Name: ESTATES ON LEGACY DRIVE 1 Lot: 16 Block: D",
-      "prop_address": "5078 CORINTHIAN BAY DR",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "5078 CORINTHIAN BAY DR",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Mechanic lien",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
       "doc_num": "2026-95406",
       "doc_type": "RELEASE OF LIS PENDENS",
       "cat": "LP",
@@ -1229,31 +1154,6 @@
       "clerk_url": "",
       "flags": [
         "Lis pendens",
-        "New this week"
-      ],
-      "score": 50
-    },
-    {
-      "doc_num": "2026-95468",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-08-12",
-      "owner": "CALIXTO INOCENCIO",
-      "grantee": "CAPITAL ONE NA",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "1101 ASHWOOD DR",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "1101 ASHWOOD DR",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
         "New this week"
       ],
       "score": 50
@@ -3349,6 +3249,31 @@
       "score": 45
     },
     {
+      "doc_num": "2026-94734",
+      "doc_type": "FEDERAL TAX LIEN",
+      "cat": "LNIRS",
+      "cat_label": "Federal/IRS Tax Lien",
+      "filed": "2026-08-11",
+      "owner": "HOFSTADTER BRENEN M",
+      "grantee": "U S A INTERNAL REVENUE SERVICE",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Tax lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-94745",
       "doc_type": "ABSTRACT OF JUDGMENT",
       "cat": "JUD",
@@ -3976,6 +3901,56 @@
       "score": 45
     },
     {
+      "doc_num": "2026-95311",
+      "doc_type": "AFFIDAVIT OF HEIRSHIP",
+      "cat": "PRO",
+      "cat_label": "Probate",
+      "filed": "2026-08-12",
+      "owner": "JAIRD CYNTHIA A",
+      "grantee": "JAIRD MATTHEW A DECEASED",
+      "amount": 0.0,
+      "legal": "Subdivision - Name: THOUSAND OAKS ADDN 1 Lot: 30 Block: G Reference - I/308",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Probate / estate",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-95320",
+      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
+      "cat": "LNHOA",
+      "cat_label": "HOA Lien",
+      "filed": "2026-08-12",
+      "owner": "MAY BENNY",
+      "grantee": "HAYS CLINT",
+      "amount": 0.0,
+      "legal": "Subdivision - Name: ESTATES ON LEGACY DRIVE 1 Lot: 16 Block: D",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Mechanic lien",
+        "New this week"
+      ],
+      "score": 45
+    },
+    {
       "doc_num": "2026-95378",
       "doc_type": "LIS PENDENS (NOTICE OF)",
       "cat": "LP",
@@ -4224,6 +4199,31 @@
         "Lis pendens",
         "New this week",
         "LLC / corp owner"
+      ],
+      "score": 45
+    },
+    {
+      "doc_num": "2026-95468",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-08-12",
+      "owner": "CALIXTO INOCENCIO",
+      "grantee": "CAPITAL ONE NA",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "",
+      "mail_city": "",
+      "mail_state": "",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
       ],
       "score": 45
     },
