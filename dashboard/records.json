@@ -1,9 +1,9 @@
 {
-  "fetched_at": "2026-09-19T12:07:04+00:00",
+  "fetched_at": "2026-09-20T12:20:08+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-09-12",
-    "end": "2026-09-19"
+    "start": "2026-09-13",
+    "end": "2026-09-20"
   },
   "total": 187,
   "with_address": 55,
