@@ -1,12 +1,12 @@
 {
-  "fetched_at": "2026-10-10T13:34:27+00:00",
+  "fetched_at": "2026-10-11T14:03:30+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-10-03",
-    "end": "2026-10-10"
+    "start": "2026-10-04",
+    "end": "2026-10-11"
   },
-  "total": 189,
-  "with_address": 67,
+  "total": 190,
+  "with_address": 69,
   "records": [
     {
       "doc_num": "2026-116338",
@@ -934,6 +934,31 @@
       "score": 50
     },
     {
+      "doc_num": "2026-117413",
+      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
+      "cat": "LNHOA",
+      "cat_label": "HOA Lien",
+      "filed": "2026-10-06",
+      "owner": "ALSHUWAER MONICA",
+      "grantee": "HAYS CLINT",
+      "amount": 0.0,
+      "legal": "Subdivision-  Name: SUNSET POINTE 14 Lot: 49 Block: 68",
+      "prop_address": "2601 CALMWATER DR",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "2601 CALMWATER DR",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Mechanic lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
       "doc_num": "2026-117416",
       "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
       "cat": "LNHOA",
@@ -979,6 +1004,31 @@
       "clerk_url": "",
       "flags": [
         "Mechanic lien",
+        "New this week"
+      ],
+      "score": 50
+    },
+    {
+      "doc_num": "2026-117438",
+      "doc_type": "RELEASE OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-10-06",
+      "owner": "ANARWALA ADNAN",
+      "grantee": "HERITAGE LAKES HOMEOWNERS ASN INC",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "3449 CONTINENTAL DR",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "3449 CONTINENTAL DR",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
         "New this week"
       ],
       "score": 50
@@ -1682,31 +1732,6 @@
         "New this week"
       ],
       "score": 50
-    },
-    {
-      "doc_num": "2026-116274",
-      "doc_type": "ASSESSMENT LIEN BY HOMEOWNERS ASN",
-      "cat": "LNHOA",
-      "cat_label": "HOA Lien",
-      "filed": "2026-10-05",
-      "owner": "CASTRO DANIEL J",
-      "grantee": "CROSS OAK RANCH HOMEOWNERS ASN INC",
-      "amount": 0.0,
-      "legal": "Subdivision-  Name: CROSS OAK RANCH 3 9A Lot: 7 Block: 9B, Reference - 227 / 2013",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Mechanic lien",
-        "New this week"
-      ],
-      "score": 45
     },
     {
       "doc_num": "2026-116283",
