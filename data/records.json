@@ -1,13 +1,38 @@
 {
-  "fetched_at": "2026-10-31T13:32:35+00:00",
+  "fetched_at": "2026-11-01T14:16:57+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-10-24",
-    "end": "2026-10-31"
+    "start": "2026-10-25",
+    "end": "2026-11-01"
   },
   "total": 155,
-  "with_address": 44,
+  "with_address": 45,
   "records": [
+    {
+      "doc_num": "2026-123677",
+      "doc_type": "ABSTRACT OF JUDGMENT",
+      "cat": "JUD",
+      "cat_label": "Judgment",
+      "filed": "2026-10-26",
+      "owner": "GILLASPY JESSICA M",
+      "grantee": "MIDLAND CREDIT MANAGEMENT INC",
+      "amount": 0.0,
+      "legal": "N/A",
+      "prop_address": "1106 WENK CT",
+      "prop_city": "",
+      "prop_state": "TX",
+      "prop_zip": "",
+      "mail_address": "1106 WENK CT",
+      "mail_city": "",
+      "mail_state": "TX",
+      "mail_zip": "",
+      "clerk_url": "",
+      "flags": [
+        "Judgment lien",
+        "New this week"
+      ],
+      "score": 50
+    },
     {
       "doc_num": "2026-123890",
       "doc_type": "AFFIDAVIT OF HEIRSHIP",
@@ -1117,31 +1142,6 @@
       "filed": "2026-10-26",
       "owner": "WALLACE TAMARA",
       "grantee": "R2S INC",
-      "amount": 0.0,
-      "legal": "N/A",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Judgment lien",
-        "New this week"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-123677",
-      "doc_type": "ABSTRACT OF JUDGMENT",
-      "cat": "JUD",
-      "cat_label": "Judgment",
-      "filed": "2026-10-26",
-      "owner": "GILLASPY JESSICA M",
-      "grantee": "MIDLAND CREDIT MANAGEMENT INC",
       "amount": 0.0,
       "legal": "N/A",
       "prop_address": "",
