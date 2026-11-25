@@ -1,38 +1,13 @@
 {
-  "fetched_at": "2026-11-24T19:01:08+00:00",
+  "fetched_at": "2026-11-25T18:12:08+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-11-17",
-    "end": "2026-11-24"
+    "start": "2026-11-18",
+    "end": "2026-11-25"
   },
-  "total": 14,
-  "with_address": 3,
+  "total": 12,
+  "with_address": 2,
   "records": [
-    {
-      "doc_num": "2026-131694",
-      "doc_type": "LIS PENDENS (NOTICE OF)",
-      "cat": "LP",
-      "cat_label": "Lis Pendens",
-      "filed": "2026-11-17",
-      "owner": "LAM MAN KUEN",
-      "grantee": "CHAN JACKY",
-      "amount": 0.0,
-      "legal": "Subdivision-  Name: SANDBROCK RANCH 7 Lot: 14 Block: A, Reference - 160 / 2020",
-      "prop_address": "3605 PALMETTO AVE",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "3605 PALMETTO AVE",
-      "mail_city": "",
-      "mail_state": "TX",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Lis pendens",
-        "New this week"
-      ],
-      "score": 50
-    },
     {
       "doc_num": "2026-132947",
       "doc_type": "LIS PENDENS (NOTICE OF)",
@@ -82,32 +57,6 @@
         "New this week"
       ],
       "score": 50
-    },
-    {
-      "doc_num": "2026-131564",
-      "doc_type": "LIS PENDENS (NOTICE OF)",
-      "cat": "LP",
-      "cat_label": "Lis Pendens",
-      "filed": "2026-11-17",
-      "owner": "120 LOOP 288 DENTON LLC",
-      "grantee": "100 NORTH LOOP 288 LLC",
-      "amount": 0.0,
-      "legal": "Subdivision-  Name: 100 LOOP 288 ADDN Lot: 3A Block: A, Reference - 313 / 2024",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Lis pendens",
-        "New this week",
-        "LLC / corp owner"
-      ],
-      "score": 45
     },
     {
       "doc_num": "2026-132732",
@@ -347,10 +296,10 @@
       "cat": "LP",
       "cat_label": "Lis Pendens",
       "filed": "2026-11-24",
-      "owner": "GIBSON TRACEY WAYNE",
-      "grantee": "",
+      "owner": "MINDFUL HOME VENTURES LLC",
+      "grantee": "GIBSON TRACEY WAYNE",
       "amount": 0.0,
-      "legal": "N/A",
+      "legal": "Subdivision-  Name: HOLIDAY PARK ADDN Lot: 4 Block: D, Reference - 2 / 81",
       "prop_address": "",
       "prop_city": "",
       "prop_state": "TX",
@@ -362,7 +311,8 @@
       "clerk_url": "",
       "flags": [
         "Lis pendens",
-        "New this week"
+        "New this week",
+        "LLC / corp owner"
       ],
       "score": 45
     }
