@@ -1,11 +1,11 @@
 {
-  "fetched_at": "2026-11-26T17:56:15+00:00",
+  "fetched_at": "2026-11-27T17:36:14+00:00",
   "source": "Denton County, TX \u2014 Clerk + DCAD",
   "date_range": {
-    "start": "2026-11-19",
-    "end": "2026-11-26"
+    "start": "2026-11-20",
+    "end": "2026-11-27"
   },
-  "total": 12,
+  "total": 9,
   "with_address": 2,
   "records": [
     {
@@ -57,84 +57,6 @@
         "New this week"
       ],
       "score": 50
-    },
-    {
-      "doc_num": "2026-132732",
-      "doc_type": "LIS PENDENS (NOTICE OF)",
-      "cat": "LP",
-      "cat_label": "Lis Pendens",
-      "filed": "2026-11-19",
-      "owner": "TEXAS STATE OF",
-      "grantee": "LEGACY 1385 LLC",
-      "amount": 0.0,
-      "legal": "Survey-  Name: TH MC INTYRE SUR Survey: 903 Acres: .310",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Lis pendens",
-        "New this week",
-        "LLC / corp owner"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-132741",
-      "doc_type": "LIS PENDENS (NOTICE OF)",
-      "cat": "LP",
-      "cat_label": "Lis Pendens",
-      "filed": "2026-11-19",
-      "owner": "TEXAS STATE OF",
-      "grantee": "A1719 LLC",
-      "amount": 0.0,
-      "legal": "Survey-  Name: F H POLLARD SUR Survey: 995 Acres: 2.880",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Lis pendens",
-        "New this week",
-        "LLC / corp owner"
-      ],
-      "score": 45
-    },
-    {
-      "doc_num": "2026-132771",
-      "doc_type": "LIS PENDENS (NOTICE OF)",
-      "cat": "LP",
-      "cat_label": "Lis Pendens",
-      "filed": "2026-11-19",
-      "owner": "HAYES BERRY WHITE & VANZANT LLP",
-      "grantee": "EATON BARRY S",
-      "amount": 0.0,
-      "legal": "Survey-  Name: J CHESHIER SUR Survey: 225 Acres: 3.216",
-      "prop_address": "",
-      "prop_city": "",
-      "prop_state": "TX",
-      "prop_zip": "",
-      "mail_address": "",
-      "mail_city": "",
-      "mail_state": "",
-      "mail_zip": "",
-      "clerk_url": "",
-      "flags": [
-        "Lis pendens",
-        "New this week",
-        "LLC / corp owner"
-      ],
-      "score": 45
     },
     {
       "doc_num": "2026-133200",
